@@ -534,6 +534,12 @@ export default function GameScreen() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [isAITurn, setIsAITurn] = useState(false);
   
+  // États pour la modal pause
+  const [showPauseModal, setShowPauseModal] = useState(false);
+  
+  // États pour la punition
+  const [punishmentAnimation, setPunishmentAnimation] = useState<string | null>(null);
+  
   // Refs pour éviter les closures périmées
   const aiTimerRef = useRef<number | null>(null);
   const aiDeadlineRef = useRef<number | null>(null);
@@ -553,8 +559,10 @@ export default function GameScreen() {
     }
   }, [state.turn, mode, aiColor]);
   
+  
   // Fonction utilitaire pour lire l'état actuel
   const getLatestState = () => stateRef.current;
+  
   
   // Fonctions helpers IA
   const startAiTimer = (totalMs: number) => {
@@ -562,6 +570,10 @@ export default function GameScreen() {
     setAiRemainingMs(totalMs);
     if (aiTimerRef.current) clearInterval(aiTimerRef.current);
     aiTimerRef.current = setInterval(() => {
+      // Mettre en pause le timer IA si la modal pause est ouverte
+      if (showPauseModal) {
+        return;
+      }
       const left = Math.max(0, (aiDeadlineRef.current ?? 0) - Date.now());
       setAiRemainingMs(left);
       if (left <= 0) {
@@ -732,15 +744,41 @@ export default function GameScreen() {
   // Timer
   useEffect(() => {
     let interval: number | undefined;
-    if (isTimerActive && timeLeft > 0 && !aiThinking && !isAnimating) {
+    if (isTimerActive && timeLeft > 0 && !aiThinking && !isAnimating && !showPauseModal) {
       interval = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
-            // Temps écoulé, passer au joueur suivant
-            setState(prevState => ({
-              ...prevState,
-              turn: prevState.turn === "A" ? "B" : "A"
-            }));
+            // Temps écoulé - vérifier s'il y avait des captures obligatoires
+            const currentState = getLatestState();
+            const jumps = genJumps(currentState, currentState.turn);
+            
+            if (jumps.length > 0 && !(mode === 'ai' && currentState.turn === aiColor)) {
+              console.log('⚠️ Temps écoulé avec captures obligatoires! Punition appliquée.');
+              // Supprimer une pièce aléatoire qui devait capturer
+              const piecesThatMustCapture = new Set<string>();
+              jumps.forEach(jump => {
+                piecesThatMustCapture.add(jump.from);
+              });
+              const randomPiece = Array.from(piecesThatMustCapture)[Math.floor(Math.random() * piecesThatMustCapture.size)];
+              
+              // Animation de punition
+              setPunishmentAnimation(randomPiece);
+              setTimeout(() => setPunishmentAnimation(null), 1000);
+              
+              setState(prevState => {
+                const newState = { ...prevState };
+                delete newState.pieces[randomPiece];
+                // Passer au tour suivant après la punition
+                newState.turn = prevState.turn === "A" ? "B" : "A";
+                return newState;
+              });
+            } else {
+              // Pas de captures obligatoires, passage normal au tour suivant
+              setState(prevState => ({
+                ...prevState,
+                turn: prevState.turn === "A" ? "B" : "A"
+              }));
+            }
             return 11; // Reset timer
           }
           return prev - 1;
@@ -748,7 +786,7 @@ export default function GameScreen() {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isTimerActive, timeLeft, aiThinking, isAnimating]);
+  }, [isTimerActive, timeLeft, aiThinking, isAnimating, showPauseModal]);
 
   // Reset timer quand le tour change
   useEffect(() => {
@@ -844,10 +882,25 @@ export default function GameScreen() {
     
     const piece = state.pieces[n];
     const mine = piece?.owner === state.turn;
-    if (!sel) { if (mine && movesByFrom[n]) setSel(n); return; }
+    if (!sel) { 
+      if (mine && movesByFrom[n]) setSel(n); 
+      return; 
+    }
     if (n === sel) { setSel(null); return; }
+    
     const mv = (movesByFrom[sel] || []).find(m => m.to === n);
-    if (!mv) { if (mine && movesByFrom[n]) setSel(n); return; }
+    if (!mv) { 
+      if (mine && movesByFrom[n]) setSel(n); 
+      return; 
+    }
+    
+    console.log('🔍 Debug mouvement:', {
+      moveKind: mv.kind,
+      moveFrom: mv.from,
+      moveTo: mv.to,
+      moveOver: mv.over
+    });
+    
     const next = applyMove(state, mv);
     console.log('🎯 Mouvement effectué:', mv, 'Nouveau tour:', next.turn);
     setState(next);
@@ -862,14 +915,17 @@ export default function GameScreen() {
     setIsAITurn(false);
   };
 
-  const handleNewGame = () => {
-    // TODO: Implémenter la confirmation
-    reset();
+  const handlePause = () => {
+    setShowPauseModal(true);
   };
 
-  const handleMenu = () => {
-    // TODO: Implémenter la confirmation
+  const handleQuit = () => {
     router.push('/menu');
+  };
+
+  const handleNewGame = () => {
+    reset();
+    setShowPauseModal(false);
   };
 
   const countA = Object.values(state.pieces).filter((p): p is Piece => p !== null).filter(p => p.owner === "A").length;
@@ -922,6 +978,15 @@ export default function GameScreen() {
           </View>
         </Animated.View>
       </View>
+
+      {/* Message de punition */}
+      {punishmentAnimation && (
+        <View style={[styles.punishmentMessage, { backgroundColor: theme.colors.red }]}>
+          <Text style={[styles.punishmentText, { color: theme.colors.text }]}>
+            ⚠️ Temps écoulé ! Pièce supprimée pour non-capture obligatoire.
+          </Text>
+        </View>
+      )}
 
       {/* Plateau de jeu moderne */}
       <Animated.View 
@@ -1004,6 +1069,7 @@ export default function GameScreen() {
             const isQueenPiece = pc ? isQueen(n, state.pieces) : false;
             const isTarget = sel ? (movesByFrom[sel] || []).some((m: Move) => m.to === n) : false;
             const isCenter = n === "C";
+            const isBeingPunished = punishmentAnimation === n;
             
             // Rayons calculés de manière cohérente
             const base = Math.max(12, W * 0.03);
@@ -1040,9 +1106,9 @@ export default function GameScreen() {
                         ? (pc.owner === "A" ? "url(#queenRed)" : "url(#queenBlue)")
                         : (pc.owner === "A" ? "url(#pieceRed)" : "url(#pieceBlue)")
                       }
-                      stroke={theme.colors.pieceStroke} 
-                      strokeWidth="2"
-                      opacity={selected ? 0.8 : 1}
+                      stroke={isBeingPunished ? "#FF0000" : theme.colors.pieceStroke} 
+                      strokeWidth={isBeingPunished ? "4" : "2"}
+                      opacity={selected ? 0.8 : (isBeingPunished ? 0.5 : 1)}
                     />
                     
                     {/* Effet 3D subtil */}
@@ -1163,19 +1229,46 @@ export default function GameScreen() {
 
       {/* Contrôles modernes */}
       <View style={styles.controls}>
-        <Pressable onPress={reset} style={[styles.controlBtn, { backgroundColor: theme.colors.panel }]}>
-          <Text style={[styles.controlBtnText, { color: theme.colors.text }]}>↻</Text>
-          <Text style={[styles.controlBtnLabel, { color: theme.colors.textDim }]}>Reset</Text>
-        </Pressable>
-        <Pressable onPress={handleNewGame} style={[styles.controlBtn, { backgroundColor: theme.colors.panel }]}>
-          <Text style={[styles.controlBtnText, { color: theme.colors.text }]}>🆕</Text>
-          <Text style={[styles.controlBtnLabel, { color: theme.colors.textDim }]}>Nouveau</Text>
-        </Pressable>
-        <Pressable onPress={handleMenu} style={[styles.controlBtn, { backgroundColor: theme.colors.panel }]}>
-          <Text style={[styles.controlBtnText, { color: theme.colors.text }]}>🏠</Text>
-          <Text style={[styles.controlBtnLabel, { color: theme.colors.textDim }]}>Menu</Text>
+        <Pressable onPress={handlePause} style={[styles.controlBtn, { backgroundColor: theme.colors.panel }]}>
+          <Text style={[styles.controlBtnText, { color: theme.colors.text }]}>⏸️</Text>
+          <Text style={[styles.controlBtnLabel, { color: theme.colors.textDim }]}>Pause</Text>
         </Pressable>
       </View>
+
+      {/* Modal Pause */}
+      {showPauseModal && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Jeu en pause</Text>
+            <Text style={[styles.modalSubtitle, { color: theme.colors.textDim }]}>
+              Que souhaitez-vous faire ?
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <Pressable 
+                onPress={handleNewGame} 
+                style={[styles.modalButton, { backgroundColor: theme.colors.blue }]}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🆕 Nouveau jeu</Text>
+              </Pressable>
+              
+              <Pressable 
+                onPress={handleQuit} 
+                style={[styles.modalButton, { backgroundColor: theme.colors.panel }]}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🏠 Quitter</Text>
+              </Pressable>
+              
+              <Pressable 
+                onPress={() => setShowPauseModal(false)} 
+                style={[styles.modalButton, { backgroundColor: theme.colors.ok }]}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>▶️ Reprendre</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1323,5 +1416,69 @@ const styles = StyleSheet.create({
   controlBtnLabel: {
     fontSize: Math.max(10, W*0.025),
     fontWeight: "600",
+  },
+  
+  // Styles pour la modal pause
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  
+  modalContent: {
+    padding: 24,
+    borderRadius: 16,
+    minWidth: 280,
+    maxWidth: 320,
+    ...theme.shadow.card,
+  },
+  
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  
+  modalSubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  
+  modalButtons: {
+    gap: 12,
+  },
+  
+  modalButton: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Styles pour le message de punition
+  punishmentMessage: {
+    padding: 12,
+    marginHorizontal: 20,
+    marginVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  
+  punishmentText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
