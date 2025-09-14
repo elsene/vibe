@@ -589,7 +589,7 @@ export default function GameScreen() {
     });
   };
 
-  const getBestMoveSafely = (s: any, moves: any[]) => {
+  const getBestMoveSafely = (s: GameState, moves: Move[]): Move | null => {
     try {
       // Pour l'instant, on utilise une logique simple
       // Priorité: captures > promotion > mouvement vers le centre
@@ -611,7 +611,7 @@ export default function GameScreen() {
     return new Promise(res => setTimeout(res, ms));
   };
 
-  const playMoveWithAnimation = async (first: any) => {
+  const playMoveWithAnimation = async (first: Move) => {
     setIsAnimating(true);
 
     // Applique le 1er coup
@@ -620,13 +620,19 @@ export default function GameScreen() {
     // Si c'est un saut et que d'autres sauts sont possibles, on enchaîne
     let current = first;
     let s = getLatestState();
-    while (current.kind === 'jump' && s.mustContinueFrom) {
+    
+    // Attendre un tick pour que l'état soit mis à jour
+    await delay(100);
+    s = getLatestState();
+    
+    while (current.kind === 'jump' && s && s.mustContinueFrom) {
       await delay(250);
       const more = genJumpsFrom(s, s.turn, s.mustContinueFrom);
       if (!more || more.length === 0) break;
       const next = more[0];
       console.log(`🤖 IA continue: ${next.from} -> ${next.to} (${next.kind})`);
       setState(prev => applyMove(prev, next));
+      await delay(100);
       s = getLatestState();
       current = next;
     }
@@ -637,10 +643,9 @@ export default function GameScreen() {
   const endGameBecauseNoMoves = () => {
     console.log('Fin de partie - aucun mouvement possible');
     // TODO: Implémenter la modal de fin de partie
-    setState(initialState());
-    setSel(null);
-    setTimeLeft(14);
-    setIsTimerActive(true);
+    // Ne pas reset automatiquement, laisser l'utilisateur décider
+    setAiThinking(false);
+    setIsAITurn(false);
   };
   
   // Animations
@@ -816,11 +821,8 @@ export default function GameScreen() {
       // Navigation vers la modal de victoire
       // TODO: Implement win modal with expo-router
       console.log('Game won by:', w);
-      // For now, just reset the game
-      setState(initialState());
-      setSel(null);
-      setTimeLeft(14);
-      setIsTimerActive(true);
+      // Ne pas reset automatiquement, laisser l'utilisateur décider
+      setAiThinking(false);
       setIsAITurn(false);
     }
   }, [state, router]);
@@ -829,6 +831,12 @@ export default function GameScreen() {
     // Empêcher les interactions pendant le tour de l'IA ou les animations
     if (aiThinking || isAnimating) {
       console.log('🎯 Interaction bloquée - IA réfléchit ou animation en cours');
+      return;
+    }
+    
+    // En mode IA, empêcher le joueur humain de jouer quand c'est le tour de l'IA
+    if (mode === 'ai' && state.turn === aiColor) {
+      console.log('🎯 Interaction bloquée - C\'est le tour de l\'IA');
       return;
     }
     
