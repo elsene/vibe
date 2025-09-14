@@ -487,25 +487,163 @@ const terminal = (s: GameState): boolean => {
   return legalMoves(s).length === 0;
 };
 
-// IA simple pour jouer contre l'ordinateur
-const aiMove = (state: GameState, difficulty: string): Move | null => {
+// Fonction d'évaluation de position
+const evaluatePosition = (state: GameState, aiColor: string): number => {
+  let score = 0;
+  
+  // Compter les pièces
+  for (const [pos, piece] of Object.entries(state.pieces)) {
+    if (!piece) continue;
+    
+    const isQueenPiece = isQueen(pos, state.pieces);
+    const pieceValue = isQueenPiece ? 3 : 1; // Les dames valent plus
+    
+    if (piece.owner === aiColor) {
+      score += pieceValue;
+    } else {
+      score -= pieceValue;
+    }
+  }
+  
+  // Bonus pour les captures possibles
+  const aiMoves = legalMoves(state).filter(move => {
+    const piece = state.pieces[move.from];
+    return piece && piece.owner === aiColor;
+  });
+  
+  const captures = aiMoves.filter(move => move.kind === 'jump');
+  score += captures.length * 0.5; // Bonus pour les captures
+  
+  // Bonus pour le centre (position stratégique)
+  const centerPiece = state.pieces['C'];
+  if (centerPiece && centerPiece.owner === aiColor) {
+    score += 0.3;
+  }
+  
+  return score;
+};
+
+// IA Minimax avec élagage alpha-beta
+const minimax = (state: GameState, depth: number, isMaximizing: boolean, aiColor: string, alpha: number = -Infinity, beta: number = Infinity): number => {
+  if (depth === 0 || terminal(state)) {
+    return evaluatePosition(state, aiColor);
+  }
+  
+  const moves = legalMoves(state).filter(move => {
+    const piece = state.pieces[move.from];
+    return piece && piece.owner === (isMaximizing ? aiColor : (aiColor === 'A' ? 'B' : 'A'));
+  });
+  
+  if (moves.length === 0) {
+    return evaluatePosition(state, aiColor);
+  }
+  
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const newState = applyMove(state, move);
+      const evaluation = minimax(newState, depth - 1, false, aiColor, alpha, beta);
+      maxEval = Math.max(maxEval, evaluation);
+      alpha = Math.max(alpha, evaluation);
+      if (beta <= alpha) break; // Élagage alpha-beta
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (const move of moves) {
+      const newState = applyMove(state, move);
+      const evaluation = minimax(newState, depth - 1, true, aiColor, alpha, beta);
+      minEval = Math.min(minEval, evaluation);
+      beta = Math.min(beta, evaluation);
+      if (beta <= alpha) break; // Élagage alpha-beta
+    }
+    return minEval;
+  }
+};
+
+// IA intelligente avec différents niveaux de difficulté
+const aiMove = (state: GameState, difficulty: string, aiColor: string): Move | null => {
   try {
     console.log('🤖 IA analyse l\'état:', state.turn, 'difficulté:', difficulty);
-    const legalMovesList = legalMoves(state);
-    console.log('🤖 Mouvements légaux trouvés:', legalMovesList.length);
+    const legalMovesList = legalMoves(state).filter(move => {
+      const piece = state.pieces[move.from];
+      return piece && piece.owner === aiColor;
+    });
+    
+    console.log('🤖 Mouvements légaux IA trouvés:', legalMovesList.length);
     
     if (legalMovesList.length === 0) {
       console.log('🤖 Aucun mouvement légal disponible');
       return null;
     }
     
-    // Pour simplifier, choisir le premier mouvement disponible
-    const selectedMove = legalMovesList[0];
-    console.log('🤖 Mouvement sélectionné:', selectedMove);
+    let selectedMove: Move;
+    
+    switch (difficulty) {
+      case 'easy':
+        // IA facile : mouvements aléatoires avec préférence pour les captures
+        const captures = legalMovesList.filter(move => move.kind === 'jump');
+        if (captures.length > 0) {
+          selectedMove = captures[Math.floor(Math.random() * captures.length)];
+        } else {
+          selectedMove = legalMovesList[Math.floor(Math.random() * legalMovesList.length)];
+        }
+        console.log('🤖 IA Facile - Mouvement aléatoire:', selectedMove);
+        break;
+        
+      case 'mid':
+        // IA moyenne : minimax avec profondeur 2
+        let bestScore = -Infinity;
+        selectedMove = legalMovesList[0];
+        
+        for (const move of legalMovesList) {
+          const newState = applyMove(state, move);
+          const score = minimax(newState, 2, false, aiColor);
+          if (score > bestScore) {
+            bestScore = score;
+            selectedMove = move;
+          }
+        }
+        console.log('🤖 IA Moyenne - Score:', bestScore, 'Mouvement:', selectedMove);
+        break;
+        
+      case 'hard':
+        // IA difficile : minimax avec profondeur 4 + optimisations
+        let bestScoreHard = -Infinity;
+        selectedMove = legalMovesList[0];
+        
+        // Trier les mouvements pour améliorer l'élagage alpha-beta
+        const sortedMoves = legalMovesList.sort((a, b) => {
+          const aIsCapture = a.kind === 'jump' ? 1 : 0;
+          const bIsCapture = b.kind === 'jump' ? 1 : 0;
+          return bIsCapture - aIsCapture; // Captures en premier
+        });
+        
+        for (const move of sortedMoves) {
+          const newState = applyMove(state, move);
+          const score = minimax(newState, 4, false, aiColor);
+          if (score > bestScoreHard) {
+            bestScoreHard = score;
+            selectedMove = move;
+          }
+        }
+        console.log('🤖 IA Difficile - Score:', bestScoreHard, 'Mouvement:', selectedMove);
+        break;
+        
+      default:
+        selectedMove = legalMovesList[0];
+    }
+    
     return selectedMove;
   } catch (error) {
     console.error('🤖 Erreur dans aiMove:', error);
-    return null;
+    return legalMoves(state).filter(move => {
+      const piece = state.pieces[move.from];
+      return piece && piece.owner === aiColor;
+    }).length > 0 ? legalMoves(state).filter(move => {
+      const piece = state.pieces[move.from];
+      return piece && piece.owner === aiColor;
+    })[0] : null;
   }
 };
 
@@ -774,10 +912,10 @@ export default function GameScreen() {
               });
             } else {
               // Pas de captures obligatoires, passage normal au tour suivant
-              setState(prevState => ({
-                ...prevState,
-                turn: prevState.turn === "A" ? "B" : "A"
-              }));
+            setState(prevState => ({
+              ...prevState,
+              turn: prevState.turn === "A" ? "B" : "A"
+            }));
             }
             return 11; // Reset timer
           }
@@ -822,8 +960,8 @@ export default function GameScreen() {
     // Laisse "réfléchir" jusqu'à l'échéance (sans bloquer)
     await waitUntilDeadlineOrCancel();
 
-    // Sélectionne un coup parmi ceux de l'IA
-    let best = getBestMoveSafely(state, aiMoves);
+    // Sélectionne un coup avec notre IA intelligente
+    let best = aiMove(state, difficulty, aiColor);
     if (!best) best = aiMoves[Math.floor(Math.random() * aiMoves.length)];
 
     console.log(`🤖 IA joue: ${best.from} -> ${best.to} (${best.kind})`);
@@ -1250,7 +1388,7 @@ export default function GameScreen() {
                 style={[styles.modalButton, { backgroundColor: theme.colors.blue }]}
               >
                 <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🆕 Nouveau jeu</Text>
-              </Pressable>
+        </Pressable>
               
               <Pressable 
                 onPress={handleQuit} 
@@ -1264,8 +1402,8 @@ export default function GameScreen() {
                 style={[styles.modalButton, { backgroundColor: theme.colors.ok }]}
               >
                 <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>▶️ Reprendre</Text>
-              </Pressable>
-            </View>
+        </Pressable>
+      </View>
           </View>
         </View>
       )}
