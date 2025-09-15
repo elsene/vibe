@@ -1,7 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Dimensions, Pressable, StyleSheet, Text, Vibration, View } from "react-native";
 import Svg, { Circle, Defs, Line, LinearGradient, RadialGradient, Stop } from "react-native-svg";
+import { useLanguage } from '../context/LanguageContext';
+import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
 import { theme } from '../theme';
 
@@ -523,8 +525,13 @@ const evaluatePosition = (state: GameState, aiColor: string): number => {
   return score;
 };
 
-// IA Minimax avec élagage alpha-beta
-const minimax = (state: GameState, depth: number, isMaximizing: boolean, aiColor: string, alpha: number = -Infinity, beta: number = Infinity): number => {
+// IA Minimax optimisée avec élagage alpha-beta et timeout
+const minimax = (state: GameState, depth: number, isMaximizing: boolean, aiColor: string, alpha: number = -Infinity, beta: number = Infinity, startTime: number = Date.now(), maxTime: number = 2000): number => {
+  // Timeout pour éviter les blocages
+  if (Date.now() - startTime > maxTime) {
+    return evaluatePosition(state, aiColor);
+  }
+  
   if (depth === 0 || terminal(state)) {
     return evaluatePosition(state, aiColor);
   }
@@ -538,11 +545,15 @@ const minimax = (state: GameState, depth: number, isMaximizing: boolean, aiColor
     return evaluatePosition(state, aiColor);
   }
   
+  // Limiter le nombre de mouvements évalués pour la performance
+  const maxMoves = Math.min(moves.length, 8);
+  const movesToEvaluate = moves.slice(0, maxMoves);
+  
   if (isMaximizing) {
     let maxEval = -Infinity;
-    for (const move of moves) {
+    for (const move of movesToEvaluate) {
       const newState = applyMove(state, move);
-      const evaluation = minimax(newState, depth - 1, false, aiColor, alpha, beta);
+      const evaluation = minimax(newState, depth - 1, false, aiColor, alpha, beta, startTime, maxTime);
       maxEval = Math.max(maxEval, evaluation);
       alpha = Math.max(alpha, evaluation);
       if (beta <= alpha) break; // Élagage alpha-beta
@@ -550,9 +561,9 @@ const minimax = (state: GameState, depth: number, isMaximizing: boolean, aiColor
     return maxEval;
   } else {
     let minEval = Infinity;
-    for (const move of moves) {
+    for (const move of movesToEvaluate) {
       const newState = applyMove(state, move);
-      const evaluation = minimax(newState, depth - 1, true, aiColor, alpha, beta);
+      const evaluation = minimax(newState, depth - 1, true, aiColor, alpha, beta, startTime, maxTime);
       minEval = Math.min(minEval, evaluation);
       beta = Math.min(beta, evaluation);
       if (beta <= alpha) break; // Élagage alpha-beta
@@ -592,13 +603,18 @@ const aiMove = (state: GameState, difficulty: string, aiColor: string): Move | n
         break;
         
       case 'mid':
-        // IA moyenne : minimax avec profondeur 2
+        // IA moyenne : minimax avec profondeur 1 + timeout
         let bestScore = -Infinity;
         selectedMove = legalMovesList[0];
+        const startTimeMid = Date.now();
         
-        for (const move of legalMovesList) {
+        // Limiter à 6 mouvements pour la performance
+        const movesToEvaluateMid = legalMovesList.slice(0, 6);
+        
+        for (const move of movesToEvaluateMid) {
+          if (Date.now() - startTimeMid > 1500) break; // Timeout 1.5s
           const newState = applyMove(state, move);
-          const score = minimax(newState, 2, false, aiColor);
+          const score = minimax(newState, 1, false, aiColor, -Infinity, Infinity, startTimeMid, 1500);
           if (score > bestScore) {
             bestScore = score;
             selectedMove = move;
@@ -608,9 +624,10 @@ const aiMove = (state: GameState, difficulty: string, aiColor: string): Move | n
         break;
         
       case 'hard':
-        // IA difficile : minimax avec profondeur 4 + optimisations
+        // IA difficile : minimax avec profondeur 2 + optimisations
         let bestScoreHard = -Infinity;
         selectedMove = legalMovesList[0];
+        const startTimeHard = Date.now();
         
         // Trier les mouvements pour améliorer l'élagage alpha-beta
         const sortedMoves = legalMovesList.sort((a, b) => {
@@ -619,9 +636,13 @@ const aiMove = (state: GameState, difficulty: string, aiColor: string): Move | n
           return bIsCapture - aIsCapture; // Captures en premier
         });
         
-        for (const move of sortedMoves) {
+        // Limiter à 8 mouvements pour la performance
+        const movesToEvaluateHard = sortedMoves.slice(0, 8);
+        
+        for (const move of movesToEvaluateHard) {
+          if (Date.now() - startTimeHard > 2000) break; // Timeout 2s
           const newState = applyMove(state, move);
-          const score = minimax(newState, 4, false, aiColor);
+          const score = minimax(newState, 2, false, aiColor, -Infinity, Infinity, startTimeHard, 2000);
           if (score > bestScoreHard) {
             bestScoreHard = score;
             selectedMove = move;
@@ -651,9 +672,11 @@ export default function GameScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { colors } = useTheme();
+  const { settings } = useSettings();
+  const { t } = useLanguage();
   
   const mode = params.mode as string || 'local';
-  const difficulty = params.difficulty as string || 'mid';
+  const difficulty = settings.difficulty; // Utilise les paramètres sauvegardés
   const adsDisabled = params.adsDisabled === 'true';
 
   // Constantes IA
@@ -677,6 +700,11 @@ export default function GameScreen() {
   
   // États pour la punition
   const [punishmentAnimation, setPunishmentAnimation] = useState<string | null>(null);
+  
+  // États pour la fin de jeu
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const [gameWinner, setGameWinner] = useState<string | null>(null);
+  const [finalScore, setFinalScore] = useState({ red: 0, blue: 0 });
   
   // Refs pour éviter les closures périmées
   const aiTimerRef = useRef<number | null>(null);
@@ -792,10 +820,67 @@ export default function GameScreen() {
 
   const endGameBecauseNoMoves = () => {
     console.log('Fin de partie - aucun mouvement possible');
-    // TODO: Implémenter la modal de fin de partie
     // Ne pas reset automatiquement, laisser l'utilisateur décider
     setAiThinking(false);
     setIsAITurn(false);
+  };
+
+  const checkGameOver = () => {
+    const countA = Object.values(state.pieces).filter((p): p is Piece => p !== null).filter(p => p.owner === "A").length;
+    const countB = Object.values(state.pieces).filter((p): p is Piece => p !== null).filter(p => p.owner === "B").length;
+    
+    if (countA === 0 || countB === 0) {
+      const winner = countA === 0 ? "B" : "A";
+      const winnerName = winner === "A" ? "Rouge" : "Bleu";
+      
+      setGameWinner(winnerName);
+      setFinalScore({ red: countA, blue: countB });
+      setShowGameOverModal(true);
+      
+      // Arrêter le timer et l'IA
+      setAiThinking(false);
+      setIsAITurn(false);
+      setIsTimerActive(false);
+      
+      // Effets sonores et haptiques
+      if (settings.soundEffects) {
+        // TODO: Jouer un son de victoire
+        console.log('🔊 Son de victoire');
+      }
+      if (settings.vibration) {
+        Vibration.vibrate([0, 500, 200, 500]); // Vibration de victoire
+      }
+      
+      console.log(`🎉 Fin de partie ! Gagnant: ${winnerName}`);
+      return true;
+    }
+    return false;
+  };
+
+  const playSound = (type: 'move' | 'capture' | 'error' | 'victory') => {
+    if (!settings.soundEffects) return;
+    
+    // TODO: Implémenter les sons réels
+    console.log(`🔊 Son: ${type}`);
+  };
+
+  const playVibration = (type: 'move' | 'capture' | 'error' | 'victory') => {
+    if (!settings.vibration) return;
+    
+    switch (type) {
+      case 'move':
+        Vibration.vibrate(50);
+        break;
+      case 'capture':
+        Vibration.vibrate([0, 100, 50, 100]);
+        break;
+      case 'error':
+        Vibration.vibrate([0, 200, 100, 200]);
+        break;
+      case 'victory':
+        Vibration.vibrate([0, 500, 200, 500]);
+        break;
+    }
   };
   
   // Animations
@@ -928,8 +1013,13 @@ export default function GameScreen() {
 
   // Reset timer quand le tour change
   useEffect(() => {
-    setTimeLeft(14);
-  }, [state.turn]);
+    setTimeLeft(settings.timerDuration);
+  }, [state.turn, settings.timerDuration]);
+
+  // Vérifier la fin de jeu après chaque changement d'état
+  useEffect(() => {
+    checkGameOver();
+  }, [state.pieces]);
 
   // Fonction principale thinkAndPlay asynchrone et robuste
   const thinkAndPlay = async () => {
@@ -1066,6 +1156,20 @@ export default function GameScreen() {
     setShowPauseModal(false);
   };
 
+  const handleGameOverNewGame = () => {
+    reset();
+    setShowGameOverModal(false);
+    setGameWinner(null);
+    setFinalScore({ red: 0, blue: 0 });
+  };
+
+  const handleGameOverQuit = () => {
+    setShowGameOverModal(false);
+    setGameWinner(null);
+    setFinalScore({ red: 0, blue: 0 });
+    router.push('/menu');
+  };
+
   const countA = Object.values(state.pieces).filter((p): p is Piece => p !== null).filter(p => p.owner === "A").length;
   const countB = Object.values(state.pieces).filter((p): p is Piece => p !== null).filter(p => p.owner === "B").length;
 
@@ -1094,7 +1198,7 @@ export default function GameScreen() {
           ]}
         >
           <Text style={[styles.messageText, { color: theme.colors.text }]}>
-            {aiThinking ? `IA réfléchit... ${Math.ceil(aiRemainingMs/100)/10}s` : `Tour : ${state.turn === "A" ? "Rouge" : "Bleu"}`}
+            {aiThinking ? `${t('game.ai_thinking')} ${Math.ceil(aiRemainingMs/100)/10}s` : `${t('game.turn')} : ${state.turn === "A" ? t('game.red') : t('game.blue')}`}
           </Text>
           
           {/* Timer moderne */}
@@ -1121,7 +1225,7 @@ export default function GameScreen() {
       {punishmentAnimation && (
         <View style={[styles.punishmentMessage, { backgroundColor: theme.colors.red }]}>
           <Text style={[styles.punishmentText, { color: theme.colors.text }]}>
-            ⚠️ Temps écoulé ! Pièce supprimée pour non-capture obligatoire.
+            ⚠️ {t('game.punishment.message')}
           </Text>
         </View>
       )}
@@ -1369,7 +1473,7 @@ export default function GameScreen() {
       <View style={styles.controls}>
         <Pressable onPress={handlePause} style={[styles.controlBtn, { backgroundColor: theme.colors.panel }]}>
           <Text style={[styles.controlBtnText, { color: theme.colors.text }]}>⏸️</Text>
-          <Text style={[styles.controlBtnLabel, { color: theme.colors.textDim }]}>Pause</Text>
+          <Text style={[styles.controlBtnLabel, { color: theme.colors.textDim }]}>{t('game.pause')}</Text>
         </Pressable>
       </View>
 
@@ -1377,9 +1481,9 @@ export default function GameScreen() {
       {showPauseModal && (
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Jeu en pause</Text>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>{t('game.pause.title')}</Text>
             <Text style={[styles.modalSubtitle, { color: theme.colors.textDim }]}>
-              Que souhaitez-vous faire ?
+              {t('game.pause.subtitle')}
             </Text>
             
             <View style={styles.modalButtons}>
@@ -1387,23 +1491,63 @@ export default function GameScreen() {
                 onPress={handleNewGame} 
                 style={[styles.modalButton, { backgroundColor: theme.colors.blue }]}
               >
-                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🆕 Nouveau jeu</Text>
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🆕 {t('game.pause.new')}</Text>
         </Pressable>
               
               <Pressable 
                 onPress={handleQuit} 
                 style={[styles.modalButton, { backgroundColor: theme.colors.panel }]}
               >
-                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🏠 Quitter</Text>
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🏠 {t('game.pause.quit')}</Text>
               </Pressable>
               
               <Pressable 
                 onPress={() => setShowPauseModal(false)} 
                 style={[styles.modalButton, { backgroundColor: theme.colors.ok }]}
               >
-                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>▶️ Reprendre</Text>
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>▶️ {t('game.pause.resume')}</Text>
         </Pressable>
       </View>
+          </View>
+        </View>
+      )}
+
+      {/* Modal Fin de Jeu */}
+      {showGameOverModal && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>🎉 {t('game.over.title')}</Text>
+            <Text style={[styles.modalSubtitle, { color: theme.colors.textDim }]}>
+              {t('game.over.winner', { winner: gameWinner || '' })}
+            </Text>
+            
+            {/* Score final */}
+            <View style={styles.gameOverScoreContainer}>
+              <View style={styles.gameOverScoreItem}>
+                <View style={[styles.gameOverScoreDot, { backgroundColor: theme.colors.red }]} />
+                <Text style={[styles.gameOverScoreValue, { color: theme.colors.text }]}>{t('game.red')}: {finalScore.red}</Text>
+              </View>
+              <View style={styles.gameOverScoreItem}>
+                <View style={[styles.gameOverScoreDot, { backgroundColor: theme.colors.blue }]} />
+                <Text style={[styles.gameOverScoreValue, { color: theme.colors.text }]}>{t('game.blue')}: {finalScore.blue}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <Pressable 
+                onPress={handleGameOverNewGame} 
+                style={[styles.modalButton, { backgroundColor: theme.colors.blue }]}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🆕 {t('game.over.new')}</Text>
+              </Pressable>
+              
+              <Pressable 
+                onPress={handleGameOverQuit} 
+                style={[styles.modalButton, { backgroundColor: theme.colors.panel }]}
+              >
+                <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🏠 {t('game.over.quit')}</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       )}
@@ -1618,5 +1762,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  
+  // Styles pour la modal de fin de jeu
+  gameOverScoreContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 20,
+    paddingHorizontal: 20,
+  },
+  
+  gameOverScoreItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  
+  gameOverScoreDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  
+  gameOverScoreValue: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

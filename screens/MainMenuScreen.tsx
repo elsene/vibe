@@ -1,52 +1,56 @@
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 
 const { width: W, height: H } = Dimensions.get('window');
 
-const menuOptions = [
-  {
-    id: 'play_2p',
-    title: '🎮 Jouer à 2',
-    description: 'Affrontez un ami en local',
-    icon: '👥',
-    action: 'play_2p'
-  },
-  {
-    id: 'play_ai',
-    title: '🤖 Jouer vs IA',
-    description: 'Défiez l\'ordinateur',
-    icon: '🧠',
-    action: 'play_ai'
-  },
-  {
-    id: 'play_online',
-    title: '🌐 Jouer en ligne',
-    description: 'Parties multijoueur (bientôt)',
-    icon: '🌍',
-    action: 'play_online',
-    comingSoon: true
-  },
-  {
-    id: 'rules',
-    title: '📖 Règles',
-    description: 'Apprenez à jouer',
-    icon: '📚',
-    action: 'rules'
-  },
-  {
-    id: 'shop',
-    title: '🛒 Boutique',
-    description: 'Supprimer les publicités',
-    icon: '💎',
-    action: 'shop'
-  }
-];
+// Les options du menu seront créées dynamiquement avec les traductions
 
 export default function MainMenuScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { t } = useLanguage();
+
+  const menuOptions = [
+    {
+      id: 'play_2p',
+      title: `🎮 ${t('menu.play_local')}`,
+      description: 'Affrontez un ami en local',
+      icon: '👥',
+      action: 'play_2p'
+    },
+    {
+      id: 'play_ai',
+      title: `🤖 ${t('menu.play_ai')}`,
+      description: 'Défiez l\'ordinateur',
+      icon: '🧠',
+      action: 'play_ai'
+    },
+    {
+      id: 'play_online',
+      title: `🌐 ${t('menu.online')}`,
+      description: 'Parties multijoueur (bientôt)',
+      icon: '🌍',
+      action: 'play_online',
+      comingSoon: true
+    },
+    {
+      id: 'rules',
+      title: `📖 ${t('menu.rules')}`,
+      description: 'Apprenez à jouer',
+      icon: '📚',
+      action: 'rules'
+    },
+    {
+      id: 'shop',
+      title: `🛒 ${t('menu.shop')}`,
+      description: 'Supprimer les publicités',
+      icon: '💎',
+      action: 'shop'
+    }
+  ];
 
   const handleMenuAction = async (action: string) => {
     switch (action) {
@@ -115,10 +119,10 @@ export default function MainMenuScreen() {
 
         <View style={styles.titleSection}>
           <Text style={[styles.gameTitle, { color: colors.accent }]}>
-            WHEEL CHECKERS
+            {t('menu.title')}
           </Text>
           <Text style={[styles.gameSubtitle, { color: colors.textSecondary }]}>
-            Jeu de Dames Moderne
+            {t('menu.subtitle')}
           </Text>
         </View>
 
