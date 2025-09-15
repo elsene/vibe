@@ -1,23 +1,32 @@
 import { Stack } from 'expo-router';
 import React from 'react';
+import { AudioProvider } from '../context/AudioContext';
+import { GameCenterProvider } from '../context/GameCenterManager';
 import { LanguageProvider } from '../context/LanguageContext';
 import { SettingsProvider } from '../context/SettingsContext';
 import { ThemeProvider } from '../context/ThemeContext';
+import { AdProvider } from '../src/monetization/AdProvider';
+import { PremiumProvider } from '../src/monetization/PremiumProvider';
 
 export default function RootLayout() {
   return (
     <LanguageProvider>
       <SettingsProvider>
-        <ThemeProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              gestureEnabled: false,
-            }}
-          >
+        <PremiumProvider>
+          <GameCenterProvider>
+            <AdProvider>
+              <AudioProvider>
+                <ThemeProvider>
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      gestureEnabled: false,
+                    }}
+                  >
             <Stack.Screen name="index" />
             <Stack.Screen name="consent" />
             <Stack.Screen name="onboarding" />
+            <Stack.Screen name="welcome" />
             <Stack.Screen name="menu" />
             <Stack.Screen name="game" />
             <Stack.Screen name="rules" />
@@ -31,8 +40,12 @@ export default function RootLayout() {
                 headerShown: false,
               }}
             />
-          </Stack>
-        </ThemeProvider>
+                  </Stack>
+                </ThemeProvider>
+              </AudioProvider>
+            </AdProvider>
+          </GameCenterProvider>
+        </PremiumProvider>
       </SettingsProvider>
     </LanguageProvider>
   );

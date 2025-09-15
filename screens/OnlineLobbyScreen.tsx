@@ -1,13 +1,31 @@
 import { useRouter } from 'expo-router';
-import React from 'react';
-import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { trackOnlineBlocked } from '../src/analytics/events';
+import { PaywallModal } from '../src/monetization/PaywallModal';
+import { usePremium } from '../src/monetization/PremiumProvider';
+import { useOnlineQuota } from '../src/monetization/useOnlineQuota';
 
 const { width: W, height: H } = Dimensions.get('window');
 
 export default function OnlineLobbyScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { isPremium } = usePremium();
+  const { count, remaining, tryConsume } = useOnlineQuota();
+  const [paywallVisible, setPaywallVisible] = useState(false);
+
+  const handleStartGame = async () => {
+    const result = await tryConsume();
+    if (result.allowed) {
+      // Démarrer une partie en ligne
+      Alert.alert('Succès', 'Partie en ligne démarrée !');
+    } else {
+      trackOnlineBlocked(result.count);
+      setPaywallVisible(true);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -52,6 +70,24 @@ export default function OnlineLobbyScreen() {
         </View>
 
         <View style={styles.footer}>
+          <View style={styles.quotaInfo}>
+            <Text style={[styles.quotaText, { color: colors.textSecondary }]}>
+              {isPremium ? 'Parties illimitées' : `${remaining} parties restantes cette semaine`}
+            </Text>
+            <Text style={[styles.quotaText, { color: colors.textSecondary }]}>
+              Parties jouées: {count}
+            </Text>
+          </View>
+
+          <Pressable 
+            style={[styles.startButton, { backgroundColor: colors.accent }]}
+            onPress={handleStartGame}
+          >
+            <Text style={[styles.startButtonText, { color: colors.surface }]}>
+              🎮 Démarrer une partie
+            </Text>
+          </Pressable>
+
           <Pressable 
             style={[styles.backButton, { backgroundColor: colors.primary }]}
             onPress={() => router.back()}
@@ -62,6 +98,11 @@ export default function OnlineLobbyScreen() {
           </Pressable>
         </View>
       </View>
+
+      <PaywallModal
+        visible={paywallVisible}
+        onClose={() => setPaywallVisible(false)}
+      />
     </View>
   );
 }
@@ -128,6 +169,24 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
+  },
+  quotaInfo: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  quotaText: {
+    fontSize: Math.max(14, W * 0.035),
+    marginBottom: 5,
+  },
+  startButton: {
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    borderRadius: 12,
+    marginBottom: 15,
+  },
+  startButtonText: {
+    fontSize: Math.max(16, W * 0.04),
+    fontWeight: '700',
   },
   backButton: {
     paddingVertical: 15,

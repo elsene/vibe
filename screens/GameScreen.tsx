@@ -1,10 +1,16 @@
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Dimensions, Pressable, StyleSheet, Text, Vibration, View } from "react-native";
+import { Animated, Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Defs, Line, LinearGradient, RadialGradient, Stop } from "react-native-svg";
+import { useAudio } from '../context/AudioContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
+import { trackGameEnd } from '../src/analytics/events';
+import { useAds } from '../src/monetization/AdProvider';
+import { usePremium } from '../src/monetization/PremiumProvider';
+import UpsellInline from '../src/ui/UpsellInline';
 import { theme } from '../theme';
 
 // Types
@@ -674,6 +680,9 @@ export default function GameScreen() {
   const { colors } = useTheme();
   const { settings } = useSettings();
   const { t } = useLanguage();
+  const { playSound, playVibration, playBackgroundMusic, stopBackgroundMusic } = useAudio();
+  const { showInterstitialIfEligible } = useAds();
+  const { isPremium } = usePremium();
   
   const mode = params.mode as string || 'local';
   const difficulty = settings.difficulty; // Utilise les paramètres sauvegardés
@@ -825,7 +834,7 @@ export default function GameScreen() {
     setIsAITurn(false);
   };
 
-  const checkGameOver = () => {
+  const checkGameOver = async () => {
     const countA = Object.values(state.pieces).filter((p): p is Piece => p !== null).filter(p => p.owner === "A").length;
     const countB = Object.values(state.pieces).filter((p): p is Piece => p !== null).filter(p => p.owner === "B").length;
     
@@ -837,19 +846,22 @@ export default function GameScreen() {
       setFinalScore({ red: countA, blue: countB });
       setShowGameOverModal(true);
       
+      // Analytics
+      trackGameEnd(isPremium);
+      
+      // Afficher une publicité après la fin de partie (si non premium)
+      if (!isPremium) {
+        await showInterstitialIfEligible('game_end');
+      }
+      
       // Arrêter le timer et l'IA
       setAiThinking(false);
       setIsAITurn(false);
       setIsTimerActive(false);
       
       // Effets sonores et haptiques
-      if (settings.soundEffects) {
-        // TODO: Jouer un son de victoire
-        console.log('🔊 Son de victoire');
-      }
-      if (settings.vibration) {
-        Vibration.vibrate([0, 500, 200, 500]); // Vibration de victoire
-      }
+      playSound('victory');
+      playVibration('success');
       
       console.log(`🎉 Fin de partie ! Gagnant: ${winnerName}`);
       return true;
@@ -857,31 +869,6 @@ export default function GameScreen() {
     return false;
   };
 
-  const playSound = (type: 'move' | 'capture' | 'error' | 'victory') => {
-    if (!settings.soundEffects) return;
-    
-    // TODO: Implémenter les sons réels
-    console.log(`🔊 Son: ${type}`);
-  };
-
-  const playVibration = (type: 'move' | 'capture' | 'error' | 'victory') => {
-    if (!settings.vibration) return;
-    
-    switch (type) {
-      case 'move':
-        Vibration.vibrate(50);
-        break;
-      case 'capture':
-        Vibration.vibrate([0, 100, 50, 100]);
-        break;
-      case 'error':
-        Vibration.vibrate([0, 200, 100, 200]);
-        break;
-      case 'victory':
-        Vibration.vibrate([0, 500, 200, 500]);
-        break;
-    }
-  };
   
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -988,6 +975,10 @@ export default function GameScreen() {
               setPunishmentAnimation(randomPiece);
               setTimeout(() => setPunishmentAnimation(null), 1000);
               
+              // Effets audio et haptiques pour la punition
+              playSound('error');
+              playVibration('error');
+              
               setState(prevState => {
                 const newState = { ...prevState };
                 delete newState.pieces[randomPiece];
@@ -1020,6 +1011,17 @@ export default function GameScreen() {
   useEffect(() => {
     checkGameOver();
   }, [state.pieces]);
+
+  // Démarrer la musique de fond au chargement
+  useEffect(() => {
+    if (settings.backgroundMusic) {
+      playBackgroundMusic();
+    }
+    
+    return () => {
+      stopBackgroundMusic();
+    };
+  }, [settings.backgroundMusic]);
 
   // Fonction principale thinkAndPlay asynchrone et robuste
   const thinkAndPlay = async () => {
@@ -1131,6 +1133,16 @@ export default function GameScreen() {
     
     const next = applyMove(state, mv);
     console.log('🎯 Mouvement effectué:', mv, 'Nouveau tour:', next.turn);
+    
+    // Effets audio et haptiques selon le type de mouvement
+    if (mv.kind === 'jump') {
+      playSound('capture');
+      playVibration('medium');
+    } else {
+      playSound('move');
+      playVibration('light');
+    }
+    
     setState(next);
     setSel(next.mustContinueFrom ? next.mustContinueFrom : null);
   };
@@ -1144,29 +1156,52 @@ export default function GameScreen() {
   };
 
   const handlePause = () => {
+    playSound('button');
+    playVibration('light');
     setShowPauseModal(true);
   };
 
-  const handleQuit = () => {
+  // Fonction de test pour les sons
+  const testSounds = async () => {
+    console.log('🧪 Test des sons...');
+    await playSound('move');
+    setTimeout(() => playSound('capture'), 200);
+    setTimeout(() => playSound('button'), 400);
+    setTimeout(() => playSound('victory'), 600);
+  };
+
+  const handleQuit = async () => {
+    playSound('button');
+    playVibration('light');
+    // Afficher une publicité avant de retourner au menu
+    await showInterstitialIfEligible('menu_return');
     router.push('/menu');
   };
 
   const handleNewGame = () => {
+    playSound('button');
+    playVibration('light');
     reset();
     setShowPauseModal(false);
   };
 
   const handleGameOverNewGame = () => {
+    playSound('button');
+    playVibration('light');
     reset();
     setShowGameOverModal(false);
     setGameWinner(null);
     setFinalScore({ red: 0, blue: 0 });
   };
 
-  const handleGameOverQuit = () => {
+  const handleGameOverQuit = async () => {
+    playSound('button');
+    playVibration('light');
     setShowGameOverModal(false);
     setGameWinner(null);
     setFinalScore({ red: 0, blue: 0 });
+    // Afficher une publicité avant de retourner au menu
+    await showInterstitialIfEligible('menu_return');
     router.push('/menu');
   };
 
@@ -1475,6 +1510,12 @@ export default function GameScreen() {
           <Text style={[styles.controlBtnText, { color: theme.colors.text }]}>⏸️</Text>
           <Text style={[styles.controlBtnLabel, { color: theme.colors.textDim }]}>{t('game.pause')}</Text>
         </Pressable>
+        
+        {/* Bouton de test temporaire */}
+        <Pressable onPress={testSounds} style={[styles.controlBtn, { backgroundColor: theme.colors.blue }]}>
+          <Text style={[styles.controlBtnText, { color: theme.colors.text }]}>🔊</Text>
+          <Text style={[styles.controlBtnLabel, { color: theme.colors.textDim }]}>Test</Text>
+        </Pressable>
       </View>
 
       {/* Modal Pause */}
@@ -1548,6 +1589,9 @@ export default function GameScreen() {
                 <Text style={[styles.modalButtonText, { color: theme.colors.text }]}>🏠 {t('game.over.quit')}</Text>
               </Pressable>
             </View>
+            
+            {/* Upsell Premium après la fin de partie */}
+            <UpsellInline />
           </View>
         </View>
       )}
@@ -1558,7 +1602,7 @@ export default function GameScreen() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    paddingTop: Math.max(24, H*0.03),
+    paddingTop: 0, // Supprimer le padding pour prendre tout l'écran
     backgroundColor: theme.colors.bg,
   },
   

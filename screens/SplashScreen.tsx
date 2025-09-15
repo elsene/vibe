@@ -2,13 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
 
 const { width: W, height: H } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -32,8 +30,8 @@ export default function SplashScreen() {
           // Onboarding pas encore fait
           router.replace('/onboarding');
         } else {
-          // Tout est fait, aller au menu principal
-          router.replace('/menu');
+          // Tout est fait, aller à l'écran de bienvenue
+          router.replace('/welcome');
         }
       } catch (error) {
         console.log('Erreur lors de l\'initialisation:', error);
@@ -46,23 +44,23 @@ export default function SplashScreen() {
   }, [router]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.primary }]}>
+    <View style={styles.container}>
       <View style={styles.content}>
         <View style={styles.logo}>
-          <Text style={[styles.title, { color: colors.accent }]}>
+          <Text style={styles.title}>
             WHEEL
           </Text>
-          <Text style={[styles.subtitle, { color: colors.surface }]}>
+          <Text style={styles.subtitle}>
             CHECKERS
           </Text>
         </View>
         
         <View style={styles.loading}>
-          <Text style={[styles.loadingText, { color: colors.surface }]}>
+          <Text style={styles.loadingText}>
             Chargement...
           </Text>
-          <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
-            <View style={[styles.progressFill, { backgroundColor: colors.accent }]} />
+          <View style={styles.progressBar}>
+            <View style={styles.progressFill} />
           </View>
         </View>
       </View>
@@ -75,6 +73,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#2E3440', // Couleur primaire
   },
   content: {
     alignItems: 'center',
@@ -88,11 +87,13 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 4,
     marginBottom: 10,
+    color: '#88C0D0', // Couleur accent
   },
   subtitle: {
     fontSize: Math.max(32, W * 0.08),
     fontWeight: '700',
     letterSpacing: 2,
+    color: '#ECEFF4', // Couleur surface
   },
   loading: {
     alignItems: 'center',
@@ -101,16 +102,19 @@ const styles = StyleSheet.create({
     fontSize: Math.max(18, W * 0.045),
     fontWeight: '600',
     marginBottom: 20,
+    color: '#ECEFF4', // Couleur surface
   },
   progressBar: {
     width: 200,
     height: 4,
     borderRadius: 2,
     overflow: 'hidden',
+    backgroundColor: '#4C566A', // Couleur border
   },
   progressFill: {
     height: '100%',
     width: '60%',
     borderRadius: 2,
+    backgroundColor: '#88C0D0', // Couleur accent
   },
 });

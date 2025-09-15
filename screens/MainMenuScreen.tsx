@@ -1,8 +1,14 @@
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useGameCenter } from '../context/GameCenterManager';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { trackOnlineBlocked } from '../src/analytics/events';
+import { PaywallModal } from '../src/monetization/PaywallModal';
+import { usePremium } from '../src/monetization/PremiumProvider';
+import { useOnlineQuota } from '../src/monetization/useOnlineQuota';
+import PremiumBanner from '../src/ui/PremiumBanner';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -12,6 +18,10 @@ export default function MainMenuScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useLanguage();
+  const { isPremium, openPaywall } = usePremium();
+  const { isAuthenticated: isGameCenterAuthenticated, playerName } = useGameCenter();
+  const { tryConsume, remaining } = useOnlineQuota();
+  const [paywallVisible, setPaywallVisible] = useState(false);
 
   const menuOptions = [
     {
@@ -31,10 +41,11 @@ export default function MainMenuScreen() {
     {
       id: 'play_online',
       title: `🌐 ${t('menu.online')}`,
-      description: 'Parties multijoueur (bientôt)',
+      description: isPremium ? 'Parties multijoueur illimitées' : `${remaining} parties gratuites restantes`,
       icon: '🌍',
       action: 'play_online',
-      comingSoon: true
+      comingSoon: false,
+      premiumRequired: false
     },
     {
       id: 'rules',
@@ -44,11 +55,11 @@ export default function MainMenuScreen() {
       action: 'rules'
     },
     {
-      id: 'shop',
-      title: `🛒 ${t('menu.shop')}`,
-      description: 'Supprimer les publicités',
-      icon: '💎',
-      action: 'shop'
+      id: 'premium',
+      title: `👑 ${isPremium ? 'Premium Actif' : 'Passer Premium'}`,
+      description: isPremium ? 'Vous êtes Premium !' : 'Débloquez toutes les fonctionnalités',
+      icon: isPremium ? '👑' : '💎',
+      action: 'premium'
     }
   ];
 
@@ -61,18 +72,27 @@ export default function MainMenuScreen() {
         router.push('/difficulty-picker');
         break;
       case 'play_online':
-        router.push('/online');
+        const result = await tryConsume();
+        if (result.allowed) {
+          router.push('/online');
+        } else {
+          trackOnlineBlocked(result.count);
+          setPaywallVisible(true);
+        }
         break;
       case 'rules':
         router.push('/rules');
         break;
-      case 'shop':
-        router.push('/shop');
+      case 'premium':
+        if (!isPremium) {
+          setPaywallVisible(true);
+        }
         break;
       default:
         console.log('Action non reconnue:', action);
     }
   };
+
 
   const handleSettings = () => {
     router.push('/settings');
@@ -89,6 +109,9 @@ export default function MainMenuScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Bandeau Premium */}
+        <PremiumBanner />
+        
         <View style={[styles.header, { backgroundColor: colors.surface }]}>
           <View style={styles.profileSection}>
             <View style={styles.avatarContainer}>
@@ -99,10 +122,12 @@ export default function MainMenuScreen() {
             
             <View style={styles.userInfo}>
               <Text style={[styles.userName, { color: colors.text }]}>
-                Joueur
+                {isGameCenterAuthenticated ? playerName || 'Joueur' : 'Joueur'}
+                {isPremium && ' 👑'}
               </Text>
               <Text style={[styles.userLevel, { color: colors.accent }]}>
-                Niveau 1
+                {isPremium ? 'Premium' : 'Gratuit'}
+                {isGameCenterAuthenticated && ' • Game Center'}
               </Text>
             </View>
             
@@ -173,6 +198,12 @@ export default function MainMenuScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      
+      {/* Paywall Modal */}
+      <PaywallModal 
+        visible={paywallVisible} 
+        onClose={() => setPaywallVisible(false)} 
+      />
     </View>
   );
 }
@@ -301,5 +332,23 @@ const styles = StyleSheet.create({
   versionText: {
     fontSize: Math.max(14, W * 0.035),
     fontWeight: '500',
+  },
+  adBannerContainer: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#f0f0f0',
+  },
+  adBanner: {
+    width: '90%',
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  adBannerText: {
+    fontSize: 12,
+    textAlign: 'center',
   },
 });
