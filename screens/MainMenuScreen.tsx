@@ -60,6 +60,13 @@ export default function MainMenuScreen() {
       description: isPremium ? 'Vous êtes Premium !' : 'Débloquez toutes les fonctionnalités',
       icon: isPremium ? '👑' : '💎',
       action: 'premium'
+    },
+    {
+      id: 'dev',
+      title: '🧪 Dev Monétisation',
+      description: 'Tests iOS (AdMob + RevenueCat)',
+      icon: '🔧',
+      action: 'dev'
     }
   ];
 
@@ -87,6 +94,9 @@ export default function MainMenuScreen() {
         if (!isPremium) {
           setPaywallVisible(true);
         }
+        break;
+      case 'dev':
+        router.push('/dev-monetization');
         break;
       default:
         console.log('Action non reconnue:', action);
@@ -332,23 +342,5 @@ const styles = StyleSheet.create({
   versionText: {
     fontSize: Math.max(14, W * 0.035),
     fontWeight: '500',
-  },
-  adBannerContainer: {
-    alignItems: 'center',
-    paddingVertical: 10,
-    backgroundColor: '#f0f0f0',
-  },
-  adBanner: {
-    width: '90%',
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  adBannerText: {
-    fontSize: 12,
-    textAlign: 'center',
   },
 });

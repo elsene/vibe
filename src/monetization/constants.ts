@@ -5,16 +5,19 @@ export const WEEKLY_ONLINE_FREE_LIMIT = 5;
 export const ADS_ENABLED = process.env.EXPO_PUBLIC_ADS_ENABLED !== 'false';
 export const PAYWALL_ENABLED = process.env.EXPO_PUBLIC_PAYWALL_ENABLED !== 'false';
 
-// AdMob Test IDs (pour le développement)
+// AdMob Test IDs iOS (pour le développement et QA)
 export const ADMOB_TEST_IDS = {
-  INTERSTITIAL: 'ca-app-pub-3940256099942544/1033173712', // Test Android
-  BANNER: 'ca-app-pub-3940256099942544/6300978111', // Test Android
-  REWARDED: 'ca-app-pub-3940256099942544/5224354917' // Test Android
+  INTERSTITIAL: 'ca-app-pub-3940256099942544/1033173712', // Test iOS
+  BANNER: 'ca-app-pub-3940256099942544/6300978111', // Test iOS
+  REWARDED: 'ca-app-pub-3940256099942544/5224354917' // Test iOS
 };
 
-// Production IDs (à remplacer par les vrais)
+// Production IDs iOS (à remplacer par les vrais pour la release)
 export const ADMOB_PRODUCTION_IDS = {
-  INTERSTITIAL: 'ca-app-pub-XXXX/YYYY',
-  BANNER: 'ca-app-pub-XXXX/YYYY',
-  REWARDED: 'ca-app-pub-XXXX/YYYY'
+  INTERSTITIAL: 'ca-app-pub-XXXX/YYYY', // À remplacer par votre ID iOS
+  BANNER: 'ca-app-pub-XXXX/YYYY', // À remplacer par votre ID iOS
+  REWARDED: 'ca-app-pub-XXXX/YYYY' // À remplacer par votre ID iOS
 };
+
+// Configuration iOS uniquement
+export const IS_IOS_ONLY = true;

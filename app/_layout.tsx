@@ -33,6 +33,7 @@ export default function RootLayout() {
             <Stack.Screen name="settings" />
             <Stack.Screen name="shop" />
             <Stack.Screen name="online" />
+            <Stack.Screen name="dev-monetization" />
             <Stack.Screen 
               name="difficulty-picker" 
               options={{
