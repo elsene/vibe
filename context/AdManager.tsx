@@ -1,4 +1,6 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
+import mobileAds from 'react-native-google-mobile-ads';
 import { usePremium } from './PremiumManager';
 
 interface AdManagerContextType {
@@ -10,11 +12,17 @@ interface AdManagerContextType {
 
 const AdManagerContext = createContext<AdManagerContextType | undefined>(undefined);
 
-// Configuration des unités publicitaires (mode développement)
+// Configuration des unités publicitaires
 const AD_UNITS = {
-  BANNER: 'ca-app-pub-3940256099942544/6300978111', // Test Android
-  INTERSTITIAL: 'ca-app-pub-3940256099942544/1033173712', // Test Android
-  REWARDED: 'ca-app-pub-3940256099942544/5224354917' // Test Android
+  BANNER: Platform.OS === 'ios' 
+    ? 'ca-app-pub-3940256099942544/2934735716' // Test iOS
+    : 'ca-app-pub-3940256099942544/6300978111', // Test Android
+  INTERSTITIAL: Platform.OS === 'ios'
+    ? 'ca-app-pub-3940256099942544/4411468910' // Test iOS
+    : 'ca-app-pub-3940256099942544/1033173712', // Test Android
+  REWARDED: Platform.OS === 'ios'
+    ? 'ca-app-pub-3940256099942544/1712485313' // Test iOS
+    : 'ca-app-pub-3940256099942544/5224354917' // Test Android
 };
 
 export const AdManagerProvider = ({ children }: { children: ReactNode }) => {
@@ -34,18 +42,38 @@ export const AdManagerProvider = ({ children }: { children: ReactNode }) => {
 
   const initializeAds = async () => {
     try {
-      console.log('✅ AdManager initialisé (mode développement)');
+      // Configuration AdMob pour EAS Build
+      await mobileAds().initialize();
+      console.log('📱 AdMob: Initialisé pour EAS Build');
+      
+      // Charger la première publicité interstitielle
+      await loadInterstitial();
     } catch (error) {
-      console.log('❌ Erreur lors de l\'initialisation AdManager:', error);
+      console.log('📱 AdMob: Erreur d\'initialisation', error);
     }
   };
 
   const loadInterstitial = async () => {
     try {
-      console.log('✅ Publicité interstitielle simulée chargée');
-      setInterstitialLoaded(true);
+      const { InterstitialAd, AdEventType, TestIds } = await import('react-native-google-mobile-ads');
+      
+      const interstitialAd = InterstitialAd.createForAdRequest(AD_UNITS.INTERSTITIAL, {
+        requestNonPersonalizedAdsOnly: true,
+      });
+
+      interstitialAd.addAdEventListener(AdEventType.LOADED, () => {
+        console.log('📱 AdMob: Publicité interstitielle chargée');
+        setInterstitialLoaded(true);
+      });
+
+      interstitialAd.addAdEventListener(AdEventType.ERROR, (error) => {
+        console.log('📱 AdMob: Erreur publicité interstitielle', error);
+        setInterstitialLoaded(false);
+      });
+
+      interstitialAd.load();
     } catch (error) {
-      console.log('❌ Erreur lors du chargement de la publicité interstitielle:', error);
+      console.log('📱 AdMob: Erreur lors du chargement de la publicité interstitielle:', error);
       setInterstitialLoaded(false);
     }
   };
@@ -54,19 +82,36 @@ export const AdManagerProvider = ({ children }: { children: ReactNode }) => {
     try {
       // Ne pas afficher de publicités si l'utilisateur est Premium
       if (isPremium) {
-        console.log('✅ Utilisateur Premium - pas de publicité');
+        console.log('📱 AdMob: Utilisateur Premium - pas de publicité');
         return;
       }
 
-      console.log('✅ Publicité interstitielle simulée affichée');
-      setInterstitialLoaded(false);
+      if (!interstitialLoaded) {
+        console.log('📱 AdMob: Publicité interstitielle pas encore chargée');
+        return;
+      }
+
+      const { InterstitialAd, AdEventType } = await import('react-native-google-mobile-ads');
       
-      // Recharger une nouvelle publicité pour la prochaine fois
-      setTimeout(() => {
-        loadInterstitial();
-      }, 1000);
+      const interstitialAd = InterstitialAd.createForAdRequest(AD_UNITS.INTERSTITIAL);
+      
+      interstitialAd.addAdEventListener(AdEventType.OPENED, () => {
+        console.log('📱 AdMob: Publicité interstitielle ouverte');
+      });
+
+      interstitialAd.addAdEventListener(AdEventType.CLOSED, () => {
+        console.log('📱 AdMob: Publicité interstitielle fermée');
+        setInterstitialLoaded(false);
+        
+        // Recharger une nouvelle publicité pour la prochaine fois
+        setTimeout(() => {
+          loadInterstitial();
+        }, 1000);
+      });
+
+      await interstitialAd.show();
     } catch (error) {
-      console.log('❌ Erreur lors de l\'affichage de la publicité interstitielle:', error);
+      console.log('📱 AdMob: Erreur lors de l\'affichage de la publicité interstitielle:', error);
       setInterstitialLoaded(false);
     }
   };

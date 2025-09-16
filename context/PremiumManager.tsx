@@ -1,5 +1,6 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
+import Purchases from 'react-native-purchases';
 import { trackPaywallShown, trackPurchaseSuccess } from './analytics';
 import { PAYWALL_ENABLED } from './constants';
 
@@ -50,27 +51,50 @@ export const PremiumProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     (async () => {
       try {
-        // Mode développement - simuler les packages
-        console.log('📱 Mode développement - Packages Premium simulés');
-        setPackages([
-          {
-            identifier: 'monthly',
-            product: {
-              title: 'Premium Mensuel',
-              priceString: '1.99€'
-            }
-          },
-          {
-            identifier: 'annual',
-            product: {
-              title: 'Premium Annuel',
-              priceString: '14.99€'
-            }
+        // Configuration RevenueCat pour EAS Build
+        const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
+        
+        if (apiKey) {
+          console.log('📱 RevenueCat: Configuration EAS Build');
+          await Purchases.configure({
+            apiKey: apiKey,
+            appUserID: undefined, // Anonymous user
+          });
+          
+          // Charger les packages
+          const offerings = await Purchases.getOfferings();
+          if (offerings.current) {
+            setPackages(offerings.current.availablePackages);
+            console.log('📱 RevenueCat: Packages chargés', offerings.current.availablePackages.length);
           }
-        ]);
-        setIsPremium(false);
+          
+          // Vérifier le statut Premium
+          const customerInfo = await Purchases.getCustomerInfo();
+          setIsPremium(customerInfo.entitlements.active['premium'] !== undefined);
+          console.log('📱 RevenueCat: Statut Premium', customerInfo.entitlements.active['premium'] !== undefined);
+        } else {
+          // Mode développement - simuler les packages
+          console.log('📱 RevenueCat: Mode développement - Packages simulés');
+          setPackages([
+            {
+              identifier: 'monthly',
+              product: {
+                title: 'Premium Mensuel',
+                priceString: '1.99€'
+              }
+            },
+            {
+              identifier: 'annual',
+              product: {
+                title: 'Premium Annuel',
+                priceString: '14.99€'
+              }
+            }
+          ]);
+          setIsPremium(false);
+        }
       } catch (e) {
-        console.warn('Premium init fail', e);
+        console.warn('📱 RevenueCat: Erreur d\'initialisation', e);
         setIsPremium(false);
         setPackages([]);
       } finally {
@@ -81,10 +105,18 @@ export const PremiumProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshCustomer = async () => {
     try {
-      // Mode développement - simuler le refresh
-      console.log('📱 Mode développement - Refresh Premium simulé');
+      const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
+      
+      if (apiKey) {
+        console.log('📱 RevenueCat: Refresh customer info');
+        const customerInfo = await Purchases.getCustomerInfo();
+        setIsPremium(customerInfo.entitlements.active['premium'] !== undefined);
+        console.log('📱 RevenueCat: Statut Premium mis à jour', customerInfo.entitlements.active['premium'] !== undefined);
+      } else {
+        console.log('📱 RevenueCat: Mode développement - Refresh simulé');
+      }
     } catch (e) {
-      console.warn('Premium refresh fail', e);
+      console.warn('📱 RevenueCat: Erreur de refresh', e);
     }
   };
 
@@ -96,14 +128,27 @@ export const PremiumProvider = ({ children }: { children: ReactNode }) => {
 
   const purchasePackage = async (pkg: any) => {
     try {
-      // Mode développement - simuler l'achat
-      console.log('📱 Mode développement - Achat simulé:', pkg.identifier);
-      setIsPremium(true);
-      trackPurchaseSuccess(pkg.identifier);
-      setPaywallVisible(false);
-      Alert.alert('Succès', 'Votre abonnement Premium est maintenant actif !');
+      const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
+      
+      if (apiKey) {
+        console.log('📱 RevenueCat: Tentative d\'achat - Package:', pkg.identifier);
+        console.log('📱 RevenueCat: Achat en cours - Produit:', pkg.product.title);
+        
+        const { customerInfo } = await Purchases.purchasePackage(pkg);
+        setIsPremium(customerInfo.entitlements.active['premium'] !== undefined);
+        trackPurchaseSuccess(pkg.identifier);
+        setPaywallVisible(false);
+        Alert.alert('Succès', 'Votre abonnement Premium est maintenant actif !');
+      } else {
+        // Mode développement - simuler l'achat
+        console.log('📱 RevenueCat: Mode développement - Achat simulé:', pkg.identifier);
+        setIsPremium(true);
+        trackPurchaseSuccess(pkg.identifier);
+        setPaywallVisible(false);
+        Alert.alert('Succès', 'Votre abonnement Premium est maintenant actif !');
+      }
     } catch (e: any) {
-      console.warn('purchase error', e);
+      console.warn('📱 RevenueCat: Erreur d\'achat', e);
       Alert.alert('Erreur', 'L\'achat a échoué. Veuillez réessayer.');
     }
   };
