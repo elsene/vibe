@@ -18,7 +18,7 @@ export default function MainMenuScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { t } = useLanguage();
-  const { isPremium, openPaywall } = usePremium();
+  const { isPremium } = usePremium();
   const { isAuthenticated: isGameCenterAuthenticated, playerName } = useGameCenter();
   const { tryConsume, remaining } = useOnlineQuota();
   const [paywallVisible, setPaywallVisible] = useState(false);
@@ -55,6 +55,13 @@ export default function MainMenuScreen() {
       action: 'rules'
     },
     {
+      id: 'stats',
+      title: '📊 Statistiques',
+      description: 'Vos performances et achievements',
+      icon: '📈',
+      action: 'stats'
+    },
+    {
       id: 'premium',
       title: `👑 ${isPremium ? 'Premium Actif' : 'Passer Premium'}`,
       description: isPremium ? 'Vous êtes Premium !' : 'Débloquez toutes les fonctionnalités',
@@ -89,6 +96,9 @@ export default function MainMenuScreen() {
         break;
       case 'rules':
         router.push('/rules');
+        break;
+      case 'stats':
+        router.push('/stats');
         break;
       case 'premium':
         if (!isPremium) {

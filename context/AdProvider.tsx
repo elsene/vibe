@@ -1,5 +1,5 @@
 import React, { ReactNode, createContext, useContext, useEffect, useState } from 'react';
-import { usePremium } from './PremiumManager';
+import { usePremium } from '../src/state/PremiumContext';
 import { trackAdShown } from './analytics';
 import { ADS_ENABLED } from './constants';
 
@@ -12,13 +12,13 @@ const AdContext = createContext<AdContextType>({
 });
 
 export const AdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { isPremium } = usePremium();
+  const { premium } = usePremium();
   const [loaded, setLoaded] = useState(false);
   const [lastShown, setLastShown] = useState<number>(0);
   const [gamesSinceLast, setGamesSinceLast] = useState(0);
 
   const load = () => {
-    if (!ADS_ENABLED || isPremium) return;
+    if (!ADS_ENABLED || premium) return;
     
     // Mode développement - simuler le chargement
     setTimeout(() => {
@@ -29,10 +29,10 @@ export const AdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 
   useEffect(() => {
     load();
-  }, [isPremium]);
+  }, [premium]);
 
   const showInterstitialIfEligible = async (context = 'game_end') => {
-    if (!ADS_ENABLED || isPremium) return;
+    if (!ADS_ENABLED || premium) return;
     
     // Limiter: 1 pub toutes les 2 parties, cooldown 120s
     const now = Date.now();

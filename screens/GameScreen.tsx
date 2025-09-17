@@ -9,7 +9,9 @@ import { useSettings } from '../context/SettingsContext';
 import { useTheme } from '../context/ThemeContext';
 import { trackGameEnd } from '../src/analytics/events';
 import { useAds } from '../src/monetization/AdProvider';
-import { usePremium } from '../src/monetization/PremiumProvider';
+import { achievementService } from '../src/services/AchievementService';
+import { scoreService } from '../src/services/ScoreService';
+import { usePremium } from '../src/state/PremiumContext';
 import UpsellInline from '../src/ui/UpsellInline';
 import { theme } from '../theme';
 
@@ -682,7 +684,7 @@ export default function GameScreen() {
   const { t } = useLanguage();
   const { playSound, playVibration, playBackgroundMusic, stopBackgroundMusic } = useAudio();
   const { showInterstitialIfEligible } = useAds();
-  const { isPremium } = usePremium();
+  const { premium } = usePremium();
   
   const mode = params.mode as string || 'local';
   const difficulty = settings.difficulty; // Utilise les paramètres sauvegardés
@@ -847,10 +849,28 @@ export default function GameScreen() {
       setShowGameOverModal(true);
       
       // Analytics
-      trackGameEnd(isPremium);
+      trackGameEnd(premium);
+      
+      // Enregistrer les scores et achievements
+      if (mode === 'local' || mode === 'online') {
+        const isPlayerWin = (winner === "A" && mode === 'local') || (winner === "B" && mode === 'online');
+        
+        if (isPlayerWin) {
+          await scoreService.recordWin();
+          await achievementService.checkWinAchievements();
+          
+          // Vérifier victoire parfaite (pas de pions perdus)
+          const playerPiecesLost = winner === "A" ? countB : countA;
+          if (playerPiecesLost === 0) {
+            await achievementService.checkFlawlessAchievement();
+          }
+        } else {
+          await scoreService.recordLoss();
+        }
+      }
       
       // Afficher une publicité après la fin de partie (si non premium)
-      if (!isPremium) {
+      if (!premium) {
         await showInterstitialIfEligible('game_end');
       }
       

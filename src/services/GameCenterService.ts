@@ -117,8 +117,8 @@ class GameCenterService {
 
   async authenticate(): Promise<GameCenterAuthResult> {
     if (!isNativeModuleAvailable) {
-      console.log('🎮 GameCenterService: Module natif non disponible - vérifiez le build EAS');
-      throw new Error('Game Center non disponible - rebuild nécessaire avec EAS');
+      console.log('🎮 GameCenterService: Module natif non disponible - mode mock activé');
+      return { authenticated: false };
     }
 
     console.log('🎮 GameCenterService: Authentification...');
@@ -145,13 +145,19 @@ class GameCenterService {
   // MARK: - Access Point & Dashboard
 
   showAccessPoint(visible: boolean) {
-    if (Platform.OS !== 'ios') return;
+    if (!isNativeModuleAvailable) {
+      console.log('🎮 GameCenterService: Module natif non disponible - Access Point non modifié');
+      return;
+    }
     console.log('🎮 GameCenterService: Access Point visible =', visible);
     NativeModules.GameCenterModule.showAccessPoint(visible);
   }
 
   showDashboard() {
-    if (Platform.OS !== 'ios') return;
+    if (!isNativeModuleAvailable) {
+      console.log('🎮 GameCenterService: Module natif non disponible - dashboard non affiché');
+      return;
+    }
     console.log('🎮 GameCenterService: Affichage dashboard');
     NativeModules.GameCenterModule.showDashboard();
   }
@@ -159,7 +165,10 @@ class GameCenterService {
   // MARK: - Leaderboards & Achievements
 
   async submitScore(leaderboardId: string, value: number): Promise<void> {
-    if (Platform.OS !== 'ios') return;
+    if (!isNativeModuleAvailable) {
+      console.log('🎮 GameCenterService: Module natif non disponible - score non soumis');
+      return;
+    }
     console.log('🎮 GameCenterService: Soumission score', leaderboardId, value);
     
     try {
@@ -174,7 +183,10 @@ class GameCenterService {
   }
 
   async reportAchievement(achievementId: string, percent: number): Promise<void> {
-    if (Platform.OS !== 'ios') return;
+    if (!isNativeModuleAvailable) {
+      console.log('🎮 GameCenterService: Module natif non disponible - achievement non rapporté');
+      return;
+    }
     console.log('🎮 GameCenterService: Rapport achievement', achievementId, percent);
     
     try {
@@ -191,8 +203,8 @@ class GameCenterService {
   // MARK: - Matchmaking
 
   async findMatch(options: { minPlayers?: number; maxPlayers?: number; inviteMessage?: string }): Promise<GameCenterMatchResult> {
-    if (Platform.OS !== 'ios') {
-      throw new Error('Game Center non supporté sur cette plateforme');
+    if (!isNativeModuleAvailable) {
+      throw new Error('Game Center non disponible - module natif non trouvé');
     }
 
     console.log('🎮 GameCenterService: Recherche de match', options);
@@ -222,7 +234,13 @@ class GameCenterService {
   }
 
   disconnect() {
-    if (Platform.OS !== 'ios') return;
+    if (!isNativeModuleAvailable) {
+      console.log('🎮 GameCenterService: Module natif non disponible - déconnexion simulée');
+      this.currentMatch = null;
+      this.currentState = GameCenterServiceState.IDLE;
+      this.messageQueue = [];
+      return;
+    }
     console.log('🎮 GameCenterService: Déconnexion');
     
     this.stopPingPong();
@@ -238,7 +256,10 @@ class GameCenterService {
   // MARK: - Envoi de données
 
   async send(data: NetworkMessage, reliable: boolean = true): Promise<void> {
-    if (Platform.OS !== 'ios') return;
+    if (!isNativeModuleAvailable) {
+      console.log('🎮 GameCenterService: Module natif non disponible - message non envoyé');
+      return;
+    }
 
     // Si pas encore connecté, mettre en file d'attente
     if (this.currentState !== GameCenterServiceState.IN_MATCH) {

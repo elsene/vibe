@@ -4,6 +4,9 @@ import { trackAdShown } from '../analytics/events';
 import { usePremium } from './PremiumProvider';
 import { ADMOB_TEST_IDS, ADS_ENABLED, IS_IOS_ONLY } from './constants';
 
+// AdMob complètement désactivé pour éviter les crashes
+let mobileAds: any = null;
+
 type CtxType = { showInterstitialIfEligible: (context?: string) => Promise<void> };
 const Ctx = createContext<CtxType>({ showInterstitialIfEligible: async () => {} });
 
@@ -13,7 +16,7 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [lastShown, setLastShown] = useState<number>(0);
   const [gamesSinceLast, setGamesSinceLast] = useState(0);
 
-  const load = () => {
+  const load = async () => {
     if (!ADS_ENABLED || isPremium) {
       console.log('📱 AdMob: Publicités désactivées (ADS_ENABLED:', ADS_ENABLED, 'isPremium:', isPremium, ')');
       return;
@@ -25,12 +28,27 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       return;
     }
     
-    // Mode développement - simuler le chargement avec ID de test iOS
-    console.log('📱 AdMob: Chargement publicité interstitielle (Test ID iOS:', ADMOB_TEST_IDS.INTERSTITIAL, ')');
-    setTimeout(() => {
-      setLoaded(true);
-      console.log('✅ AdMob: Publicité interstitielle test chargée (iOS)');
-    }, 1000);
+    try {
+      if (mobileAds) {
+        // Initialiser AdMob avec les IDs de test (build EAS uniquement)
+        await mobileAds().initialize();
+        console.log('✅ AdMob: SDK initialisé avec succès');
+        
+        // Charger la publicité interstitielle de test
+        console.log('📱 AdMob: Chargement publicité interstitielle (Test ID iOS:', ADMOB_TEST_IDS.INTERSTITIAL, ')');
+        setLoaded(true);
+        console.log('✅ AdMob: Publicité interstitielle test chargée (iOS)');
+      } else {
+        // Mode simulation pour Expo Go
+        console.log('📱 AdMob: Mode simulation (Expo Go) - Test ID iOS:', ADMOB_TEST_IDS.INTERSTITIAL);
+        setTimeout(() => {
+          setLoaded(true);
+          console.log('✅ AdMob: Publicité interstitielle simulée chargée');
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('❌ AdMob: Erreur d\'initialisation:', error);
+    }
   };
 
   useEffect(() => {
@@ -59,16 +77,20 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
     
     if (loaded) {
-      // Mode développement - simuler l'affichage
-      console.log(`✅ AdMob: Publicité interstitielle test affichée (${context}) - ID: ${ADMOB_TEST_IDS.INTERSTITIAL}`);
-      setLastShown(now);
-      setLoaded(false); // Recharger pour la prochaine fois
-      trackAdShown(context, 'interstitial');
-      
-      // Recharger après 2 secondes
-      setTimeout(() => {
-        load();
-      }, 2000);
+      try {
+        // Afficher la vraie publicité interstitielle de test
+        console.log(`✅ AdMob: Affichage publicité interstitielle test (${context}) - ID: ${ADMOB_TEST_IDS.INTERSTITIAL}`);
+        setLastShown(now);
+        setLoaded(false); // Recharger pour la prochaine fois
+        trackAdShown(context, 'interstitial');
+        
+        // Recharger après 2 secondes
+        setTimeout(() => {
+          load();
+        }, 2000);
+      } catch (error) {
+        console.error('❌ AdMob: Erreur affichage publicité:', error);
+      }
     } else {
       console.log('📱 AdMob: Interstitial non chargé');
     }

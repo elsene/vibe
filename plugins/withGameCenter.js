@@ -12,20 +12,6 @@ const withGameCenter = (config) => {
       config.modResults.NSGameCenterUsageDescription = 'Cette application utilise Game Center pour le multijoueur en ligne et les classements.';
     }
 
-    // Configurer l'Access Point Game Center (position bord écran)
-    if (!config.modResults.GKGameCenterAccessPointPosition) {
-      config.modResults.GKGameCenterAccessPointPosition = 'topLeading';
-    }
-
-    // Ajouter les frameworks Game Center
-    if (!config.modResults.UIRequiredDeviceCapabilities) {
-      config.modResults.UIRequiredDeviceCapabilities = [];
-    }
-    
-    if (!config.modResults.UIRequiredDeviceCapabilities.includes('gamekit')) {
-      config.modResults.UIRequiredDeviceCapabilities.push('gamekit');
-    }
-
     console.log('✅ Game Center config plugin appliqué');
     return config;
   });

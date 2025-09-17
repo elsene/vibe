@@ -2,10 +2,9 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
-import { trackOnlineBlocked } from '../src/analytics/events';
+import { useOnlineLimits } from '../src/hooks/useOnlineLimits';
 import { PaywallModal } from '../src/monetization/PaywallModal';
 import { usePremium } from '../src/monetization/PremiumProvider';
-import { useOnlineQuota } from '../src/monetization/useOnlineQuota';
 import gameCenterService, { GameCenterAuthResult, GameCenterMatchResult, GameCenterServiceState } from '../src/services/GameCenterService';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -14,8 +13,48 @@ export default function OnlineLobbyScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { isPremium } = usePremium();
-  const { count, remaining, tryConsume } = useOnlineQuota();
+  const { canPlayOnlineUnlimited, weeklyOnlineLimit } = useOnlineLimits();
   const [paywallVisible, setPaywallVisible] = useState(false);
+  
+  // Détecter le mode développement (Expo Go)
+  const isDevelopmentMode = __DEV__ && Platform.OS === 'ios';
+  
+  // En mode développement (Expo Go), afficher un message d'information
+  if (isDevelopmentMode) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: colors.text }]}>
+              🎮 Mode En Ligne
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              Mode Développement - Game Center Simulé
+            </Text>
+          </View>
+          
+          <View style={[styles.statusCard, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.statusTitle, { color: colors.text }]}>
+              ℹ️ Information
+            </Text>
+            <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+              Le mode multijoueur en ligne nécessite un build EAS avec Game Center activé.{'\n\n'}
+              En mode développement (Expo Go), Game Center est simulé.
+            </Text>
+          </View>
+          
+          <Pressable
+            style={[styles.backButton, { backgroundColor: colors.accent }]}
+            onPress={() => router.back()}
+          >
+            <Text style={[styles.backButtonText, { color: colors.background }]}>
+              ← Retour au Menu
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
   
   // États Game Center
   const [gameCenterState, setGameCenterState] = useState<GameCenterServiceState>(GameCenterServiceState.IDLE);
@@ -70,13 +109,10 @@ export default function OnlineLobbyScreen() {
 
   const handleFindMatch = async () => {
     // Vérifier Premium/Quota avant matchmaking
-    if (!isPremium) {
-      const result = await tryConsume();
-      if (!result.allowed) {
-        trackOnlineBlocked(result.count);
-        setPaywallVisible(true);
-        return;
-      }
+    if (!canPlayOnlineUnlimited) {
+      // TODO: Implémenter le compteur de parties hebdomadaires
+      setPaywallVisible(true);
+      return;
     }
 
     if (!authResult?.authenticated) {

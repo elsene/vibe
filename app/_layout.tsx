@@ -10,13 +10,13 @@ import { PremiumProvider } from '../src/monetization/PremiumProvider';
 
 export default function RootLayout() {
   return (
-    <LanguageProvider>
-      <SettingsProvider>
-        <PremiumProvider>
-          <GameCenterProvider>
-            <AdProvider>
-              <AudioProvider>
-                <ThemeProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <SettingsProvider>
+          <PremiumProvider>
+            <GameCenterProvider>
+              <AdProvider>
+                <AudioProvider>
                   <Stack
                     screenOptions={{
                       headerShown: false,
@@ -42,12 +42,12 @@ export default function RootLayout() {
               }}
             />
                   </Stack>
-                </ThemeProvider>
-              </AudioProvider>
-            </AdProvider>
-          </GameCenterProvider>
-        </PremiumProvider>
-      </SettingsProvider>
-    </LanguageProvider>
+                </AudioProvider>
+              </AdProvider>
+            </GameCenterProvider>
+          </PremiumProvider>
+        </SettingsProvider>
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
