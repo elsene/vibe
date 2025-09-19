@@ -13,7 +13,6 @@
       "bundleIdentifier": "com.elsene.wheelcheckers",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "FirebaseAppDelegateProxyEnabled": false,
         "GADApplicationIdentifier": "ca-app-pub-3940256099942544~1458002511"
       }
 

@@ -1,6 +1,5 @@
 import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import * as GameCenterAnalytics from '../analytics/gameCenterEvents';
-import FirebaseService from './FirebaseService';
 
 // Vérifier si le module natif est disponible
 const GameCenterModule = NativeModules.GameCenterModule;
@@ -140,11 +139,6 @@ class GameCenterService {
       this.currentState = GameCenterServiceState.IDLE;
       GameCenterAnalytics.trackAuthFail(error instanceof Error ? error.message : 'Erreur inconnue');
       
-      // Log Firebase (EAS Build uniquement)
-      if (error instanceof Error && !__DEV__ && Platform.OS !== 'web') {
-        FirebaseService.logError(error, 'GameCenter Authentication');
-        FirebaseService.logGameCenterEvent('auth_failed', { error: error.message });
-      }
       
       throw error;
     }
