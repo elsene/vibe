@@ -10,7 +10,6 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "googleServicesFile": "./ios/GoogleService-Info.plist",
       "bundleIdentifier": "com.elsene.wheelcheckers",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -43,8 +42,6 @@
         }
       ],
       "./plugins/withGameCenter",
-      "./plugins/withFirebasePods",
-      "@react-native-firebase/app",
       [
         "react-native-google-mobile-ads",
         {
