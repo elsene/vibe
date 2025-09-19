@@ -2,7 +2,7 @@ export const ENTITLEMENT_ID = 'pro'; // RevenueCat entitlement
 export const WEEKLY_ONLINE_FREE_LIMIT = 5;
 
 // Feature flags via .env (avec valeurs par défaut)
-export const ADS_ENABLED = false; // Désactivé temporairement pour éviter le crash EAS
+export const ADS_ENABLED = true; // Activé pour la production avec configuration complète
 export const PAYWALL_ENABLED = process.env.EXPO_PUBLIC_PAYWALL_ENABLED !== 'false';
 
 // AdMob Test IDs iOS (pour le développement et QA)

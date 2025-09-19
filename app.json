@@ -11,9 +11,13 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.elsene.wheelcheckers",
+      "googleServicesFile": "./ios/GoogleService-Info.plist",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "FirebaseAppDelegateProxyEnabled": false,
+        "GADApplicationIdentifier": "ca-app-pub-3940256099942544~1458002511"
       }
+      
     },
     "android": {
       "adaptiveIcon": {
@@ -38,7 +42,15 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "./plugins/withGameCenter"
+      "./plugins/withGameCenter",
+      "./plugins/withFirebase",
+      "@react-native-firebase/app",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "ios_app_id": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

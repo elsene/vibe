@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { AudioProvider } from '../context/AudioContext';
 import { GameCenterProvider } from '../context/GameCenterManager';
 import { LanguageProvider } from '../context/LanguageContext';
@@ -7,8 +8,17 @@ import { SettingsProvider } from '../context/SettingsContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import { AdProvider } from '../src/monetization/AdProvider';
 import { PremiumProvider } from '../src/monetization/PremiumProvider';
+import FirebaseService from '../src/services/FirebaseService';
 
 export default function RootLayout() {
+  useEffect(() => {
+    // Initialiser Firebase au démarrage de l'app (EAS Build uniquement)
+    const isExpoGo = __DEV__ || Platform.OS === 'web';
+    if (!isExpoGo) {
+      FirebaseService.initialize();
+    }
+  }, []);
+
   return (
     <ThemeProvider>
       <LanguageProvider>

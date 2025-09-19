@@ -447,7 +447,7 @@ const legalMoves = (s: GameState): Move[] => {
   }
   
   const steps = genSteps(s, p);
-  console.log(`🚶 Mouvements simples: ${steps.length}`);
+  console.log('🚶 Mouvements simples:', steps.length);
   return steps;
 };
 

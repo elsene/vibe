@@ -16,7 +16,7 @@ export const PaywallModal: React.FC<{ visible: boolean; onClose: () => void; }> 
       console.log('📱 RevenueCat: Tentative d\'achat - Package:', pkgId);
       
       // Vérifier si nous sommes en mode développement
-      const isExpoGo = __DEV__ && Platform.OS === 'web';
+      const isExpoGo = __DEV__ || Platform.OS === 'web';
       if (isExpoGo) {
         console.log('📱 RevenueCat: Mode Expo Go - Achat simulé');
         Alert.alert(
@@ -66,7 +66,7 @@ export const PaywallModal: React.FC<{ visible: boolean; onClose: () => void; }> 
       console.log('📱 RevenueCat: Restauration des achats...');
       
       // Vérifier si nous sommes en mode développement
-      const isExpoGo = __DEV__ && Platform.OS === 'web';
+      const isExpoGo = __DEV__ || Platform.OS === 'web';
       if (isExpoGo) {
         console.log('📱 RevenueCat: Mode Expo Go - Restauration simulée');
         Alert.alert(

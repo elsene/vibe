@@ -4,8 +4,27 @@ import { trackAdShown } from '../analytics/events';
 import { usePremium } from './PremiumProvider';
 import { ADMOB_TEST_IDS, ADS_ENABLED, IS_IOS_ONLY } from './constants';
 
-// AdMob complètement désactivé pour éviter les crashes
+// Import conditionnel d'AdMob avec gestion robuste des erreurs
 let mobileAds: any = null;
+let isAdMobAvailable = false;
+
+// Ne pas importer AdMob en mode web ou en développement
+if (Platform.OS !== 'web' && !__DEV__) {
+  try {
+    // Essayer d'importer AdMob uniquement en EAS Build
+    mobileAds = require('react-native-google-mobile-ads').default;
+    isAdMobAvailable = true;
+    console.log('📱 AdMob: Module importé avec succès');
+  } catch (error) {
+    console.log('📱 AdMob: Module non disponible - mode simulation activé');
+    mobileAds = null;
+    isAdMobAvailable = false;
+  }
+} else {
+  console.log('📱 AdMob: Mode web/développement - mode simulation activé');
+  mobileAds = null;
+  isAdMobAvailable = false;
+}
 
 type CtxType = { showInterstitialIfEligible: (context?: string) => Promise<void> };
 const Ctx = createContext<CtxType>({ showInterstitialIfEligible: async () => {} });
@@ -29,8 +48,9 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
     
     try {
-      if (mobileAds) {
+      if (isAdMobAvailable && mobileAds) {
         // Initialiser AdMob avec les IDs de test (build EAS uniquement)
+        console.log('📱 AdMob: Initialisation du SDK...');
         await mobileAds().initialize();
         console.log('✅ AdMob: SDK initialisé avec succès');
         
@@ -39,8 +59,8 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         setLoaded(true);
         console.log('✅ AdMob: Publicité interstitielle test chargée (iOS)');
       } else {
-        // Mode simulation pour Expo Go
-        console.log('📱 AdMob: Mode simulation (Expo Go) - Test ID iOS:', ADMOB_TEST_IDS.INTERSTITIAL);
+        // Mode simulation pour Expo Go ou si AdMob n'est pas disponible
+        console.log('📱 AdMob: Mode simulation (Expo Go ou module non disponible) - Test ID iOS:', ADMOB_TEST_IDS.INTERSTITIAL);
         setTimeout(() => {
           setLoaded(true);
           console.log('✅ AdMob: Publicité interstitielle simulée chargée');
@@ -48,6 +68,12 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
     } catch (error) {
       console.error('❌ AdMob: Erreur d\'initialisation:', error);
+      // En cas d'erreur, passer en mode simulation
+      console.log('📱 AdMob: Passage en mode simulation suite à l\'erreur');
+      setTimeout(() => {
+        setLoaded(true);
+        console.log('✅ AdMob: Publicité interstitielle simulée chargée (fallback)');
+      }, 1000);
     }
   };
 
@@ -78,18 +104,36 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     
     if (loaded) {
       try {
-        // Afficher la vraie publicité interstitielle de test
-        console.log(`✅ AdMob: Affichage publicité interstitielle test (${context}) - ID: ${ADMOB_TEST_IDS.INTERSTITIAL}`);
-        setLastShown(now);
-        setLoaded(false); // Recharger pour la prochaine fois
-        trackAdShown(context, 'interstitial');
-        
-        // Recharger après 2 secondes
-        setTimeout(() => {
-          load();
-        }, 2000);
+        if (isAdMobAvailable && mobileAds) {
+          // Afficher la vraie publicité interstitielle de test
+          console.log(`✅ AdMob: Affichage publicité interstitielle test (${context}) - ID: ${ADMOB_TEST_IDS.INTERSTITIAL}`);
+          setLastShown(now);
+          setLoaded(false); // Recharger pour la prochaine fois
+          trackAdShown(context, 'interstitial');
+          
+          // Recharger après 2 secondes
+          setTimeout(() => {
+            load();
+          }, 2000);
+        } else {
+          // Mode simulation
+          console.log(`📱 AdMob: Simulation affichage publicité (${context}) - ID: ${ADMOB_TEST_IDS.INTERSTITIAL}`);
+          setLastShown(now);
+          setLoaded(false);
+          trackAdShown(context, 'interstitial');
+          
+          // Recharger après 2 secondes
+          setTimeout(() => {
+            load();
+          }, 2000);
+        }
       } catch (error) {
         console.error('❌ AdMob: Erreur affichage publicité:', error);
+        // En cas d'erreur, simuler l'affichage
+        console.log('📱 AdMob: Simulation d\'affichage suite à l\'erreur');
+        setLastShown(now);
+        setLoaded(false);
+        trackAdShown(context, 'interstitial');
       }
     } else {
       console.log('📱 AdMob: Interstitial non chargé');

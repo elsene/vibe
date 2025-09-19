@@ -16,8 +16,8 @@ export default function OnlineLobbyScreen() {
   const { canPlayOnlineUnlimited, weeklyOnlineLimit } = useOnlineLimits();
   const [paywallVisible, setPaywallVisible] = useState(false);
   
-  // Détecter le mode développement (Expo Go)
-  const isDevelopmentMode = __DEV__ && Platform.OS === 'ios';
+  // Détecter le mode développement (Expo Go) - plus robuste
+  const isDevelopmentMode = __DEV__ || Platform.OS === 'web';
   
   // En mode développement (Expo Go), afficher un message d'information
   if (isDevelopmentMode) {

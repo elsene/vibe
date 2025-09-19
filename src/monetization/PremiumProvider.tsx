@@ -37,7 +37,7 @@ export const PremiumProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         // Vérifier si nous sommes en mode développement (Expo Go)
-        const isExpoGo = __DEV__ && Platform.OS === 'web';
+        const isExpoGo = __DEV__ || Platform.OS === 'web';
         if (isExpoGo) {
           console.log('📱 RevenueCat: Mode Expo Go détecté - Utilisation du mode développement');
           setPackages([
@@ -163,7 +163,7 @@ export const PremiumProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const refreshCustomer = async () => {
     try {
       // Vérifier si nous sommes en mode développement
-      const isExpoGo = __DEV__ && Platform.OS === 'web';
+      const isExpoGo = __DEV__ || Platform.OS === 'web';
       if (isExpoGo) {
         console.log('📱 RevenueCat: Mode Expo Go - Refresh simulé');
         return;
