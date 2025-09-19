@@ -8,20 +8,13 @@ import { ADMOB_TEST_IDS, ADS_ENABLED, IS_IOS_ONLY } from './constants';
 let mobileAds: any = null;
 let isAdMobAvailable = false;
 
-// Ne pas importer AdMob en mode web ou en développement
-if (Platform.OS !== 'web' && !__DEV__) {
-  try {
-    // Essayer d'importer AdMob uniquement en EAS Build
-    mobileAds = require('react-native-google-mobile-ads').default;
-    isAdMobAvailable = true;
-    console.log('📱 AdMob: Module importé avec succès');
-  } catch (error) {
-    console.log('📱 AdMob: Module non disponible - mode simulation activé');
-    mobileAds = null;
-    isAdMobAvailable = false;
-  }
-} else {
-  console.log('📱 AdMob: Mode web/développement - mode simulation activé');
+try {
+  // Essayer d'importer AdMob
+  mobileAds = require('react-native-google-mobile-ads').default;
+  isAdMobAvailable = true;
+  console.log('📱 AdMob: Module importé avec succès');
+} catch (error) {
+  console.log('📱 AdMob: Module non disponible - mode simulation activé');
   mobileAds = null;
   isAdMobAvailable = false;
 }
@@ -51,7 +44,14 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       if (isAdMobAvailable && mobileAds) {
         // Initialiser AdMob avec les IDs de test (build EAS uniquement)
         console.log('📱 AdMob: Initialisation du SDK...');
-        await mobileAds().initialize();
+        
+        // Initialiser de manière synchrone pour éviter les conflits
+        const initializePromise = mobileAds().initialize();
+        await Promise.race([
+          initializePromise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+        ]);
+        
         console.log('✅ AdMob: SDK initialisé avec succès');
         
         // Charger la publicité interstitielle de test
