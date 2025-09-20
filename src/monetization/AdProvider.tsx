@@ -2,11 +2,13 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { trackAdShown } from '../analytics/events';
 import { usePremium } from './PremiumProvider';
-import { ADMOB_TEST_IDS, ADS_ENABLED, IS_IOS_ONLY } from './constants';
+import { ADMOB_TEST_IDS, IS_IOS_ONLY } from './constants';
+import { effectiveFlags } from '../config/FeatureFlags';
 
 // Import conditionnel d'AdMob avec gestion robuste des erreurs
 let mobileAds: any = null;
 let isAdMobAvailable = false;
+let adMobInitialized = false;
 
 try {
   // Essayer d'importer AdMob
@@ -19,6 +21,28 @@ try {
   isAdMobAvailable = false;
 }
 
+// Fonction d'initialisation lazy d'AdMob
+async function initializeAdMobLazy() {
+  if (adMobInitialized || !isAdMobAvailable || !mobileAds) return false;
+  
+  try {
+    const flags = await effectiveFlags();
+    if (!flags.ADS_ENABLED) {
+      console.log('📱 AdMob: Désactivé par SafeMode ou flags');
+      return false;
+    }
+    
+    console.log('📱 AdMob: Initialisation lazy...');
+    await mobileAds().initialize();
+    adMobInitialized = true;
+    console.log('✅ AdMob: Initialisé avec succès (lazy)');
+    return true;
+  } catch (error) {
+    console.error('❌ AdMob: Erreur initialisation lazy:', error);
+    return false;
+  }
+}
+
 type CtxType = { showInterstitialIfEligible: (context?: string) => Promise<void> };
 const Ctx = createContext<CtxType>({ showInterstitialIfEligible: async () => {} });
 
@@ -29,38 +53,31 @@ export const AdProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [gamesSinceLast, setGamesSinceLast] = useState(0);
 
   const load = async () => {
-    if (!ADS_ENABLED || isPremium) {
-      console.log('📱 AdMob: Publicités désactivées (ADS_ENABLED:', ADS_ENABLED, 'isPremium:', isPremium, ')');
-      return;
-    }
-
-    // Vérifier que nous sommes sur iOS
-    if (IS_IOS_ONLY && Platform.OS !== 'ios') {
-      console.log('📱 AdMob: iOS uniquement - Plateforme actuelle:', Platform.OS);
-      return;
-    }
-    
     try {
-      if (isAdMobAvailable && mobileAds) {
-        // Initialiser AdMob avec les IDs de test (build EAS uniquement)
-        console.log('📱 AdMob: Initialisation du SDK...');
-        
-        // Initialiser de manière synchrone pour éviter les conflits
-        const initializePromise = mobileAds().initialize();
-        await Promise.race([
-          initializePromise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
-        ]);
-        
-        console.log('✅ AdMob: SDK initialisé avec succès');
-        
+      const flags = await effectiveFlags();
+      
+      if (!flags.ADS_ENABLED || isPremium) {
+        console.log('📱 AdMob: Publicités désactivées (SafeMode:', flags.SAFE_MODE, 'isPremium:', isPremium, ')');
+        return;
+      }
+
+      // Vérifier que nous sommes sur iOS
+      if (IS_IOS_ONLY && Platform.OS !== 'ios') {
+        console.log('📱 AdMob: iOS uniquement - Plateforme actuelle:', Platform.OS);
+        return;
+      }
+      
+      // Initialisation lazy d'AdMob
+      const initialized = await initializeAdMobLazy();
+      
+      if (initialized) {
         // Charger la publicité interstitielle de test
         console.log('📱 AdMob: Chargement publicité interstitielle (Test ID iOS:', ADMOB_TEST_IDS.INTERSTITIAL, ')');
         setLoaded(true);
         console.log('✅ AdMob: Publicité interstitielle test chargée (iOS)');
       } else {
-        // Mode simulation pour Expo Go ou si AdMob n'est pas disponible
-        console.log('📱 AdMob: Mode simulation (Expo Go ou module non disponible) - Test ID iOS:', ADMOB_TEST_IDS.INTERSTITIAL);
+        // Mode simulation
+        console.log('📱 AdMob: Mode simulation - Test ID iOS:', ADMOB_TEST_IDS.INTERSTITIAL);
         setTimeout(() => {
           setLoaded(true);
           console.log('✅ AdMob: Publicité interstitielle simulée chargée');
